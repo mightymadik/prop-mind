@@ -1,0 +1,8 @@
+#!/bin/sh
+# Страховка: удаляет из сообщения коммита строки атрибуции ИИ.
+msg_file="$1"
+tmp="$(mktemp)"
+grep -v -i -E '^(Co-Authored-By: .*(Claude|anthropic)|Claude-Session:|.*Generated with \[?Claude Code)' "$msg_file" > "$tmp"
+# убрать пустые строки в конце
+awk 'NF{last=NR} {lines[NR]=$0} END{for(i=1;i<=last;i++) print lines[i]}' "$tmp" > "$msg_file"
+rm -f "$tmp"
