@@ -98,30 +98,24 @@ class SearchFilters(BaseModel):
     needs_clarification: str | None = Field(None, description="Вопрос пользователю, если запрос невыполним или слишком размыт")
 ```
 
-Надёжный способ получить JSON — принудительный вызов инструмента: тот же приём, что в уроке курса про JSON через tool use.
+JSON получаем через structured outputs: схема ответа задаётся в запросе, и модель обязана ей следовать. Раньше здесь был принудительный вызов инструмента (`tool_choice`), но на актуальных моделях он отклоняется API, а SDK 2.x не принимает `temperature`. Стабильность разбора держится на схеме, валидации Pydantic и evals. Tool use остаётся для v2, где модель сама решает, звать ли поиск.
+
+Вызов идёт через обёртку `call_structured` из `app/llm/client.py`. Внутри — `client.messages.stream(..., output_format=SearchFilters)`: SDK сам приводит схему Pydantic к требованиям API (`additionalProperties: false` у каждого объекта, `required`) и валидирует ответ. Сырой `SearchFilters.model_json_schema()` в `output_config` API отклонит: в нём нет `additionalProperties: false`.
 
 ```python
-import anthropic
-
-client = anthropic.Anthropic()
+from app.llm.client import call_structured, load_prompt
 
 def parse_query(query: str) -> SearchFilters:
-    resp = client.messages.create(
-        model=settings.parser_model,      # имя модели держите в конфиге, не в коде
-        max_tokens=1024,
-        temperature=0,
-        system=PARSER_SYSTEM_PROMPT,
-        tools=[{
-            "name": "set_filters",
-            "description": "Записать фильтры поиска недвижимости",
-            "input_schema": SearchFilters.model_json_schema(),
-        }],
-        tool_choice={"type": "tool", "name": "set_filters"},
-        messages=[{"role": "user", "content": query}],
-    )
-    block = next(b for b in resp.content if b.type == "tool_use")
-    return SearchFilters.model_validate(block.input)  # ошибка валидации → лог + повтор
+    return call_structured(
+        api_key=settings.anthropic_api_key,
+        model=cfg.models["parser"],       # имя модели держите в конфиге, не в коде
+        system=load_prompt("parse_query.md"),
+        user=query,
+        output=SearchFilters,
+    )  # обрезанный ответ или отказ → ValidationError / RuntimeError: лог + повтор
 ```
+
+Точную форму параметров сверяйте с документацией вашей версии SDK: API меняется, а тест на мок-транспорте в `tests/test_llm_client.py` ловит такие расхождения без сети.
 
 **Системный промпт (основа, дальше улучшаете по evals):**
 
