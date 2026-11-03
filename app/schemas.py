@@ -1,6 +1,8 @@
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, create_model
+
+from app.config import AppConfig
 
 DealType = Literal["sale", "rent"]
 Condition = Literal["rough", "pre_finish", "renovated", "designer"]
@@ -23,3 +25,41 @@ class Listing(BaseModel):
     price_kzt: int
     features: list[str] = []
     description: str
+
+
+class SearchFilters(BaseModel):
+    """Фильтры поиска. В коде — str/list[str]; Literal из конфига только в build_parser_schema."""
+
+    city: str | None = Field(None, description="Город; по району можно вывести, угадывать нельзя")
+    deal_type: DealType = "sale"
+    rooms: list[int] | None = Field(None, description="Допустимое число комнат. 'Евродвушка' = [2], 'студия' = [1]")
+    price_min_kzt: int | None = Field(None, description="Минимальная цена в тенге")
+    price_max_kzt: int | None = Field(None, description="Максимальная цена в тенге; для аренды — в месяц")
+    area_min_m2: float | None = None
+    districts: list[str] | None = Field(None, description="Районы без слова 'район'")
+    conditions: list[Condition] | None = None
+    features: list[str] = Field(default_factory=list)
+    semantic_query: str = Field("", description="То, что не выражается полями: 'тихий двор', 'вид на горы'")
+    needs_clarification: str | None = Field(
+        None, description="Вопрос пользователю, если запрос невыполним или слишком размыт"
+    )
+
+
+def build_parser_schema(cfg: AppConfig) -> type[SearchFilters]:
+    """Подкласс SearchFilters, где город, районы и признаки — Literal из конфига. Только для LLM."""
+    base = SearchFilters.model_fields
+
+    def narrowed(name: str, annotation: object, default: object = None) -> tuple:
+        kw = {"default_factory": list} if default is list else {"default": default}
+        return annotation, Field(description=base[name].description, **kw)
+
+    City = Literal[tuple(cfg.cities)]  # type: ignore[valid-type]
+    District = Literal[tuple(dict.fromkeys(d for ds in cfg.districts.values() for d in ds))]  # type: ignore[valid-type]
+    Feature = Literal[tuple(cfg.features)]  # type: ignore[valid-type]
+    return create_model(
+        "SearchFilters",
+        __base__=SearchFilters,
+        city=narrowed("city", City | None),
+        districts=narrowed("districts", list[District] | None),
+        features=narrowed("features", list[Feature], list),
+    )
