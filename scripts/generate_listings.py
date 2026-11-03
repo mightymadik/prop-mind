@@ -74,7 +74,6 @@ def main() -> None:
             tool_description="Сохранить сгенерированные объявления",
             input_schema=schema,
             max_tokens=32000,
-            temperature=1,
         )
         batch = Batch.model_validate(data)
         with out.open("a", encoding="utf-8") as f:
