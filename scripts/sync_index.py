@@ -15,8 +15,20 @@ from app.sources.base import ListingSource
 from app.sources.synthetic import SyntheticJsonlSource
 
 COLUMNS = [
-    "source_id", "city", "district", "complex_name", "deal_type", "rooms", "area_m2", "floor",
-    "floors_total", "year_built", "condition", "price_kzt", "features", "description",
+    "source_id",
+    "city",
+    "district",
+    "complex_name",
+    "deal_type",
+    "rooms",
+    "area_m2",
+    "floor",
+    "floors_total",
+    "year_built",
+    "condition",
+    "price_kzt",
+    "features",
+    "description",
 ]
 
 UPSERT = f"""

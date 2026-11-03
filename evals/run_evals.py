@@ -65,13 +65,18 @@ def summarize(cases: list[dict]) -> dict:
         "fully_correct": {
             "mean": round(statistics.fmean(per_repeat), 3),
             "stdev": round(statistics.stdev(per_repeat), 3) if repeats > 1 else 0.0,
-            "min": min(per_repeat), "max": max(per_repeat), "per_repeat": per_repeat,
+            "min": min(per_repeat),
+            "max": max(per_repeat),
+            "per_repeat": per_repeat,
         },
         "flaky": [c["id"] for c in cases if 0 < c["success_rate"] < 1],
         "errors": sum(r["error"] is not None for r in runs),
         "by_field": {f: round(sum(v) / len(v), 3) for f, v in fields.items()},
-        "by_tag": {t: {"n": len(cs), "success_rate": round(statistics.fmean(c["success_rate"] for c in cs), 3)}
-                   for t in tags for cs in [[c for c in cases if t in c["tags"]]]},
+        "by_tag": {
+            t: {"n": len(cs), "success_rate": round(statistics.fmean(c["success_rate"] for c in cs), 3)}
+            for t in tags
+            for cs in [[c for c in cases if t in c["tags"]]]
+        },
         "latency_ms": {"p50": int(statistics.median(lat)), "p95": lat[min(len(lat) - 1, int(len(lat) * 0.95))]},
     }
 
@@ -86,7 +91,10 @@ def run_case(case: dict, cfg, settings) -> dict:
     latency = int((time.perf_counter() - t) * 1000)
     checks = compare_filters(got, case) if got else {"error": False}
     return {
-        "ok": all(checks.values()), "checks": checks, "error": error, "latency_ms": latency,
+        "ok": all(checks.values()),
+        "checks": checks,
+        "error": error,
+        "latency_ms": latency,
         # относительно SearchFilters: у схемы для LLM дефолтов нет, exclude_defaults не сработал бы
         "got": {k: v for k, v in got.model_dump().items() if _norm(v) != _norm(DEFAULTS[k])} if got else None,
     }
@@ -112,29 +120,42 @@ def main() -> None:
         runs = list(pool.map(lambda c: run_case(c, cfg, settings), jobs))
     results = []
     for i, c in enumerate(cases):
-        rs = runs[i * args.repeats:(i + 1) * args.repeats]
-        results.append({
-            "id": c["id"], "query": c["query"], "tags": c["tags"],
-            "expected": c["expected_filters"], "semantic": c["semantic"],
-            "success_rate": round(sum(r["ok"] for r in rs) / len(rs), 3), "runs": rs,
-        })
+        rs = runs[i * args.repeats : (i + 1) * args.repeats]
+        results.append(
+            {
+                "id": c["id"],
+                "query": c["query"],
+                "tags": c["tags"],
+                "expected": c["expected_filters"],
+                "semantic": c["semantic"],
+                "success_rate": round(sum(r["ok"] for r in rs) / len(rs), 3),
+                "runs": rs,
+            }
+        )
 
     summary = summarize(results)
     prompt = (PROMPTS_DIR / PROMPT_FILE).read_bytes()
     now = datetime.now(UTC)
     report = {
-        "layer": "parse", "split": args.split, "date": now.isoformat(timespec="seconds"),
-        "config": args.config, "model": cfg.models["parser"],
-        "prompt": PROMPT_FILE, "prompt_sha": hashlib.sha256(prompt).hexdigest()[:12],
-        "summary": summary, "results": results,
+        "layer": "parse",
+        "split": args.split,
+        "date": now.isoformat(timespec="seconds"),
+        "config": args.config,
+        "model": cfg.models["parser"],
+        "prompt": PROMPT_FILE,
+        "prompt_sha": hashlib.sha256(prompt).hexdigest()[:12],
+        "summary": summary,
+        "results": results,
     }
     out = ROOT / "results" / f"{now:%Y%m%dT%H%M%SZ}_parse_{args.split}_x{args.repeats}.json"
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
     fc = summary["fully_correct"]
-    print(f"parse/{args.split} x{args.repeats}: fully correct {fc['mean']:.0%} ± {fc['stdev']:.0%} "
-          f"(min {fc['min']:.0%}, max {fc['max']:.0%}; {summary['cases']} cases, {summary['errors']} errors), "
-          f"p50 {summary['latency_ms']['p50']} ms, p95 {summary['latency_ms']['p95']} ms")
+    print(
+        f"parse/{args.split} x{args.repeats}: fully correct {fc['mean']:.0%} ± {fc['stdev']:.0%} "
+        f"(min {fc['min']:.0%}, max {fc['max']:.0%}; {summary['cases']} cases, {summary['errors']} errors), "
+        f"p50 {summary['latency_ms']['p50']} ms, p95 {summary['latency_ms']['p95']} ms"
+    )
     for f, acc in summary["by_field"].items():
         print(f"  field {f:20} {acc:.0%}")
     for t, s in summary["by_tag"].items():
@@ -143,9 +164,12 @@ def main() -> None:
         if r["success_rate"] < 1:
             bad_runs = [x for x in r["runs"] if not x["ok"]]
             bad = sorted({f for x in bad_runs for f, ok in x["checks"].items() if not ok})
-            print(f"  FAIL {r['id']} {r['success_rate']:.0%} ok, fields {bad} {bad_runs[0]['error'] or ''}"
-                  f"\n       expected {r['expected']}\n       got      {bad_runs[0]['got']}")
+            print(
+                f"  FAIL {r['id']} {r['success_rate']:.0%} ok, fields {bad} {bad_runs[0]['error'] or ''}"
+                f"\n       expected {r['expected']}\n       got      {bad_runs[0]['got']}"
+            )
     print(f"report: {out.relative_to(ROOT.parent)}")
+
 
 if __name__ == "__main__":
     main()

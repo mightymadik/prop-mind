@@ -17,9 +17,19 @@ def test_parser_schema_takes_literals_from_config():
     assert props["city"]["description"] == SearchFilters.model_fields["city"].description
 
 
-EMPTY = dict(city=None, deal_type="sale", rooms=None, price_min_kzt=None, price_max_kzt=None,
-             area_min_m2=None, districts=None, conditions=None, features=[], semantic_query="",
-             needs_clarification=None)
+EMPTY = dict(
+    city=None,
+    deal_type="sale",
+    rooms=None,
+    price_min_kzt=None,
+    price_max_kzt=None,
+    area_min_m2=None,
+    districts=None,
+    conditions=None,
+    features=[],
+    semantic_query="",
+    needs_clarification=None,
+)
 
 
 def test_parser_output_is_plain_search_filters():

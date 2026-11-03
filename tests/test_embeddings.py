@@ -6,7 +6,9 @@ from app.search import embeddings
 
 CFG = EmbeddingsConfig(provider="voyage", model="m", dim=2)
 REQ = httpx.Request("POST", embeddings.VOYAGE_URL)
-OK = httpx.Response(200, json={"data": [{"index": 1, "embedding": [0, 1]}, {"index": 0, "embedding": [1, 0]}]}, request=REQ)
+OK = httpx.Response(
+    200, json={"data": [{"index": 1, "embedding": [0, 1]}, {"index": 0, "embedding": [1, 0]}]}, request=REQ
+)
 LIMIT = httpx.Response(429, headers={"retry-after": "0"}, request=REQ)
 
 

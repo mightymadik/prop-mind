@@ -28,9 +28,9 @@ def test_semantic_modes():
 
 def test_clarification_checks_only_that_question_was_asked():
     c = case({"needs_clarification": True}, "any")
-    assert compare_filters(SearchFilters(city="Астана", needs_clarification="Метро в Астане нет. Искать в Алматы?"), c) == {
-        "needs_clarification": True
-    }
+    assert compare_filters(
+        SearchFilters(city="Астана", needs_clarification="Метро в Астане нет. Искать в Алматы?"), c
+    ) == {"needs_clarification": True}
     assert compare_filters(SearchFilters(city="Астана"), c) == {"needs_clarification": False}
     assert compare_filters(SearchFilters(needs_clarification="?"), case({}))["needs_clarification"] is False
 
@@ -42,8 +42,12 @@ def run(ok: bool, latency: int = 100) -> dict:
 def test_summarize_repeats_mean_spread_and_flaky():
     cases = [
         {"id": "a", "tags": ["simple"], "success_rate": 1.0, "runs": [run(True), run(True), run(True)]},
-        {"id": "b", "tags": ["simple", "slang"], "success_rate": 1 / 3,
-         "runs": [run(True, 300), run(False), run(False)]},
+        {
+            "id": "b",
+            "tags": ["simple", "slang"],
+            "success_rate": 1 / 3,
+            "runs": [run(True, 300), run(False), run(False)],
+        },
     ]
     s = summarize(cases)
     assert s["repeats"] == 3
@@ -69,8 +73,8 @@ def test_run_case_reports_got_without_defaults(monkeypatch):
 
     cfg = load_config("config/demo.yaml")
     empty = {k: v for k, v in SearchFilters().model_dump().items()}
-    monkeypatch.setattr(run_evals, "parse_query",
-                        lambda q, c, s: build_parser_schema(cfg)(**{**empty, "city": "Алматы"}))
-    r = run_evals.run_case({"query": "q", "expected_filters": {"city": "Алматы"}, "semantic": "empty"},
-                           cfg, Settings())
+    monkeypatch.setattr(
+        run_evals, "parse_query", lambda q, c, s: build_parser_schema(cfg)(**{**empty, "city": "Алматы"})
+    )
+    r = run_evals.run_case({"query": "q", "expected_filters": {"city": "Алматы"}, "semantic": "empty"}, cfg, Settings())
     assert r["ok"] and r["got"] == {"city": "Алматы"}
