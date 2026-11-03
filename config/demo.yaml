@@ -27,7 +27,7 @@ embeddings:
   provider: voyage
   model: voyage-3.5
   dim: 1024                      # = vector(...) в db/schema.sql
-  batch_size: 128
+  batch_size: 64                 # ~6–7K токенов: влезает в 10K TPM бесплатного тарифа Voyage
 
 limits:
   daily_budget_usd: 2
