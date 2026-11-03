@@ -1,21 +1,18 @@
 """Единственное место, которое знает о провайдере LLM."""
 
 from pathlib import Path
-from typing import TypeVar
 
 import anthropic
 from pydantic import BaseModel
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 
-T = TypeVar("T", bound=BaseModel)
-
 
 def load_prompt(name: str) -> str:
     return (PROMPTS_DIR / name).read_text(encoding="utf-8")
 
 
-def call_structured(
+def call_structured[T: BaseModel](
     *,
     api_key: str,
     model: str,

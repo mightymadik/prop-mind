@@ -1,6 +1,6 @@
 import json
 from collections.abc import Iterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.schemas import Listing
@@ -15,7 +15,7 @@ class SyntheticJsonlSource:
 
     def fetch_changed(self, since: datetime) -> Iterator[Listing]:
         # ponytail: изменения по mtime всего файла → полная выгрузка; построчно не отслеживаем
-        mtime = datetime.fromtimestamp(self.path.stat().st_mtime, tz=timezone.utc)
+        mtime = datetime.fromtimestamp(self.path.stat().st_mtime, tz=UTC)
         if mtime <= since:
             return
         with self.path.open(encoding="utf-8") as f:

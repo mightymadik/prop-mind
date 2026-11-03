@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.config import load_config
 from app.schemas import Listing
@@ -8,7 +8,7 @@ from app.search.text import build_search_text
 from app.sources.synthetic import SyntheticJsonlSource
 
 CFG = load_config("config/demo.yaml")
-EPOCH = datetime.min.replace(tzinfo=timezone.utc)
+EPOCH = datetime.min.replace(tzinfo=UTC)
 
 
 def test_demo_config_consistent():
@@ -30,15 +30,15 @@ def test_synthetic_source_maps_fields_and_respects_since(tmp_path):
     p.write_text(json.dumps(raw, ensure_ascii=False) + "\n\n", encoding="utf-8")
     src = SyntheticJsonlSource(p, CFG.field_map)
 
-    [l] = list(src.fetch_changed(EPOCH))
-    assert (l.rooms, l.price_kzt, l.description) == (2, 40_000_000, "Евродвушка")
+    [listing] = list(src.fetch_changed(EPOCH))
+    assert (listing.rooms, listing.price_kzt, listing.description) == (2, 40_000_000, "Евродвушка")
 
     os.utime(p, (0, 0))
-    assert list(src.fetch_changed(datetime(2000, 1, 1, tzinfo=timezone.utc))) == []
+    assert list(src.fetch_changed(datetime(2000, 1, 1, tzinfo=UTC))) == []
 
 
 def test_search_text_puts_fields_before_description():
-    l = Listing(
+    listing = Listing(
         source_id="x",
         city="Алматы",
         district="Бостандыкский",
@@ -51,7 +51,7 @@ def test_search_text_puts_fields_before_description():
         features=["near_metro"],
         description="Тихий двор.",
     )
-    assert build_search_text(l, CFG.features) == (
+    assert build_search_text(listing, CFG.features) == (
         "2-комнатная квартира, продажа, 64 м², ЖК Хан Тенгри, Бостандыкский район, Алматы, "
         "с ремонтом, рядом метро. Тихий двор."
     )

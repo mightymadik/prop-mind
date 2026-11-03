@@ -5,7 +5,7 @@ Upsert по source_id; эмбеддинг пересчитывается тол�
 """
 
 import argparse
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.config import AppConfig, get_settings, load_config
 from app.db import connect
@@ -57,7 +57,7 @@ def main() -> None:
     settings = get_settings()
     source = make_source(cfg)
     # ponytail: всегда полная синхронизация; хранить время последней — когда появится прод-адаптер
-    since = datetime.min.replace(tzinfo=timezone.utc)
+    since = datetime.min.replace(tzinfo=UTC)
 
     with connect() as conn:
         n = 0
