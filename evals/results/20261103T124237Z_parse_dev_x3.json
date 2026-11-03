@@ -1,0 +1,2498 @@
+{
+  "layer": "parse",
+  "split": "dev",
+  "date": "2026-11-03T12:42:37+00:00",
+  "config": "config/demo.yaml",
+  "model": "claude-haiku-5-5",
+  "prompt": "parse_query.md",
+  "prompt_sha": "ac55d2c843fb",
+  "summary": {
+    "cases": 20,
+    "repeats": 3,
+    "fully_correct": {
+      "mean": 0.95,
+      "stdev": 0.0,
+      "min": 0.95,
+      "max": 0.95,
+      "per_repeat": [
+        0.95,
+        0.95,
+        0.95
+      ]
+    },
+    "flaky": [],
+    "errors": 0,
+    "by_field": {
+      "city": 1.0,
+      "deal_type": 1.0,
+      "rooms": 1.0,
+      "price_min_kzt": 1.0,
+      "price_max_kzt": 1.0,
+      "area_min_m2": 1.0,
+      "districts": 1.0,
+      "conditions": 1.0,
+      "features": 1.0,
+      "needs_clarification": 0.95,
+      "semantic_query": 1.0
+    },
+    "by_tag": {
+      "abbrev": {
+        "n": 2,
+        "success_rate": 1.0
+      },
+      "area": {
+        "n": 2,
+        "success_rate": 1.0
+      },
+      "complex": {
+        "n": 7,
+        "success_rate": 1.0
+      },
+      "district_to_city": {
+        "n": 4,
+        "success_rate": 1.0
+      },
+      "edge": {
+        "n": 3,
+        "success_rate": 0.667
+      },
+      "features": {
+        "n": 4,
+        "success_rate": 1.0
+      },
+      "impossible_price": {
+        "n": 1,
+        "success_rate": 0.0
+      },
+      "metro": {
+        "n": 2,
+        "success_rate": 1.0
+      },
+      "multi_condition": {
+        "n": 1,
+        "success_rate": 1.0
+      },
+      "off_topic": {
+        "n": 1,
+        "success_rate": 1.0
+      },
+      "price_range": {
+        "n": 2,
+        "success_rate": 1.0
+      },
+      "rent": {
+        "n": 5,
+        "success_rate": 1.0
+      },
+      "semantic": {
+        "n": 3,
+        "success_rate": 1.0
+      },
+      "simple": {
+        "n": 7,
+        "success_rate": 1.0
+      },
+      "slang": {
+        "n": 2,
+        "success_rate": 1.0
+      },
+      "typo": {
+        "n": 1,
+        "success_rate": 1.0
+      }
+    },
+    "latency_ms": {
+      "p50": 1767,
+      "p95": 3486
+    }
+  },
+  "results": [
+    {
+      "id": "d01",
+      "query": "2-комнатная в Астане до 30 млн",
+      "tags": [
+        "simple"
+      ],
+      "expected": {
+        "city": "Астана",
+        "rooms": [
+          2
+        ],
+        "price_max_kzt": 30000000
+      },
+      "semantic": "empty",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 4202,
+          "got": {
+            "city": "Астана",
+            "deal_type": "sale",
+            "rooms": [
+              2
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": 30000000,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 2820,
+          "got": {
+            "city": "Астана",
+            "deal_type": "sale",
+            "rooms": [
+              2
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": 30000000,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 3595,
+          "got": {
+            "city": "Астана",
+            "deal_type": "sale",
+            "rooms": [
+              2
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": 30000000,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "d02",
+      "query": "квартира в Алматы от 50 до 70 млн",
+      "tags": [
+        "simple",
+        "price_range"
+      ],
+      "expected": {
+        "city": "Алматы",
+        "price_min_kzt": 50000000,
+        "price_max_kzt": 70000000
+      },
+      "semantic": "empty",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 2675,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "sale",
+            "rooms": null,
+            "price_min_kzt": 50000000,
+            "price_max_kzt": 70000000,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1412,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "sale",
+            "rooms": null,
+            "price_min_kzt": 50000000,
+            "price_max_kzt": 70000000,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1391,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "sale",
+            "rooms": null,
+            "price_min_kzt": 50000000,
+            "price_max_kzt": 70000000,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "d03",
+      "query": "аренда 3-комнатной в Алматы",
+      "tags": [
+        "simple",
+        "rent"
+      ],
+      "expected": {
+        "deal_type": "rent",
+        "city": "Алматы",
+        "rooms": [
+          3
+        ]
+      },
+      "semantic": "empty",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1488,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "rent",
+            "rooms": [
+              3
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1155,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "rent",
+            "rooms": [
+              3
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1368,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "rent",
+            "rooms": [
+              3
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "d04",
+      "query": "однокомнатная в Сарыаркинском районе",
+      "tags": [
+        "simple",
+        "district_to_city"
+      ],
+      "expected": {
+        "city": "Астана",
+        "districts": [
+          "Сарыаркинский"
+        ],
+        "rooms": [
+          1
+        ]
+      },
+      "semantic": "empty",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1201,
+          "got": {
+            "city": "Астана",
+            "deal_type": "sale",
+            "rooms": [
+              1
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": null,
+            "districts": [
+              "Сарыаркинский"
+            ],
+            "conditions": null,
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1108,
+          "got": {
+            "city": "Астана",
+            "deal_type": "sale",
+            "rooms": [
+              1
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": null,
+            "districts": [
+              "Сарыаркинский"
+            ],
+            "conditions": null,
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1164,
+          "got": {
+            "city": "Астана",
+            "deal_type": "sale",
+            "rooms": [
+              1
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": null,
+            "districts": [
+              "Сарыаркинский"
+            ],
+            "conditions": null,
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "d05",
+      "query": "4-комнатная от 100 кв м в Астане",
+      "tags": [
+        "simple",
+        "area"
+      ],
+      "expected": {
+        "city": "Астана",
+        "rooms": [
+          4
+        ],
+        "area_min_m2": 100
+      },
+      "semantic": "empty",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1909,
+          "got": {
+            "city": "Астана",
+            "deal_type": "sale",
+            "rooms": [
+              4
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": 100.0,
+            "districts": null,
+            "conditions": null,
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1750,
+          "got": {
+            "city": "Астана",
+            "deal_type": "sale",
+            "rooms": [
+              4
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": 100.0,
+            "districts": null,
+            "conditions": null,
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1513,
+          "got": {
+            "city": "Астана",
+            "deal_type": "sale",
+            "rooms": [
+              4
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": 100.0,
+            "districts": null,
+            "conditions": null,
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "d06",
+      "query": "новостройка в Бостандыкском районе с паркингом",
+      "tags": [
+        "simple",
+        "district_to_city",
+        "features"
+      ],
+      "expected": {
+        "city": "Алматы",
+        "districts": [
+          "Бостандыкский"
+        ],
+        "features": [
+          "new_building",
+          "parking"
+        ]
+      },
+      "semantic": "empty",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1255,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "sale",
+            "rooms": null,
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": null,
+            "districts": [
+              "Бостандыкский"
+            ],
+            "conditions": null,
+            "features": [
+              "new_building",
+              "parking"
+            ],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1394,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "sale",
+            "rooms": null,
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": null,
+            "districts": [
+              "Бостандыкский"
+            ],
+            "conditions": null,
+            "features": [
+              "new_building",
+              "parking"
+            ],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1195,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "sale",
+            "rooms": null,
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": null,
+            "districts": [
+              "Бостандыкский"
+            ],
+            "conditions": null,
+            "features": [
+              "new_building",
+              "parking"
+            ],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "d07",
+      "query": "квартира с мебелью в аренду в Астане до 250 тысяч",
+      "tags": [
+        "simple",
+        "rent",
+        "features"
+      ],
+      "expected": {
+        "deal_type": "rent",
+        "city": "Астана",
+        "features": [
+          "furnished"
+        ],
+        "price_max_kzt": 250000
+      },
+      "semantic": "empty",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 2001,
+          "got": {
+            "city": "Астана",
+            "deal_type": "rent",
+            "rooms": null,
+            "price_min_kzt": null,
+            "price_max_kzt": 250000,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [
+              "furnished"
+            ],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1681,
+          "got": {
+            "city": "Астана",
+            "deal_type": "rent",
+            "rooms": null,
+            "price_min_kzt": null,
+            "price_max_kzt": 250000,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [
+              "furnished"
+            ],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1120,
+          "got": {
+            "city": "Астана",
+            "deal_type": "rent",
+            "rooms": null,
+            "price_min_kzt": null,
+            "price_max_kzt": 250000,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [
+              "furnished"
+            ],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "d08",
+      "query": "ищу евродвушку или трешку в ауэзовском, бюджет до 35 лямов",
+      "tags": [
+        "complex",
+        "slang",
+        "district_to_city"
+      ],
+      "expected": {
+        "city": "Алматы",
+        "districts": [
+          "Ауэзовский"
+        ],
+        "rooms": [
+          2,
+          3
+        ],
+        "price_max_kzt": 35000000
+      },
+      "semantic": "empty",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 3486,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "sale",
+            "rooms": [
+              2,
+              3
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": 35000000,
+            "area_min_m2": null,
+            "districts": [
+              "Ауэзовский"
+            ],
+            "conditions": null,
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 2181,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "sale",
+            "rooms": [
+              2,
+              3
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": 35000000,
+            "area_min_m2": null,
+            "districts": [
+              "Ауэзовский"
+            ],
+            "conditions": null,
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 3275,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "sale",
+            "rooms": [
+              2,
+              3
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": 35000000,
+            "area_min_m2": null,
+            "districts": [
+              "Ауэзовский"
+            ],
+            "conditions": null,
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "d09",
+      "query": "сниму однушку возле метро, алмалинский или жетысуский, до 200к в месяц",
+      "tags": [
+        "complex",
+        "slang",
+        "rent",
+        "metro"
+      ],
+      "expected": {
+        "deal_type": "rent",
+        "city": "Алматы",
+        "districts": [
+          "Алмалинский",
+          "Жетысуский"
+        ],
+        "rooms": [
+          1
+        ],
+        "features": [
+          "near_metro"
+        ],
+        "price_max_kzt": 200000
+      },
+      "semantic": "empty",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1671,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "rent",
+            "rooms": [
+              1
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": 200000,
+            "area_min_m2": null,
+            "districts": [
+              "Алмалинский",
+              "Жетысуский"
+            ],
+            "conditions": null,
+            "features": [
+              "near_metro"
+            ],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1576,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "rent",
+            "rooms": [
+              1
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": 200000,
+            "area_min_m2": null,
+            "districts": [
+              "Алмалинский",
+              "Жетысуский"
+            ],
+            "conditions": null,
+            "features": [
+              "near_metro"
+            ],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1343,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "rent",
+            "rooms": [
+              1
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": 200000,
+            "area_min_m2": null,
+            "districts": [
+              "Алмалинский",
+              "Жетысуский"
+            ],
+            "conditions": null,
+            "features": [
+              "near_metro"
+            ],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "d10",
+      "query": "кв-ра 3 комн, предчистовая, астана, есиль, до 55 млн",
+      "tags": [
+        "complex",
+        "abbrev"
+      ],
+      "expected": {
+        "city": "Астана",
+        "districts": [
+          "Есильский"
+        ],
+        "rooms": [
+          3
+        ],
+        "conditions": [
+          "pre_finish"
+        ],
+        "price_max_kzt": 55000000
+      },
+      "semantic": "empty",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1823,
+          "got": {
+            "city": "Астана",
+            "deal_type": "sale",
+            "rooms": [
+              3
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": 55000000,
+            "area_min_m2": null,
+            "districts": [
+              "Есильский"
+            ],
+            "conditions": [
+              "pre_finish"
+            ],
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1200,
+          "got": {
+            "city": "Астана",
+            "deal_type": "sale",
+            "rooms": [
+              3
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": 55000000,
+            "area_min_m2": null,
+            "districts": [
+              "Есильский"
+            ],
+            "conditions": [
+              "pre_finish"
+            ],
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1186,
+          "got": {
+            "city": "Астана",
+            "deal_type": "sale",
+            "rooms": [
+              3
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": 55000000,
+            "area_min_m2": null,
+            "districts": [
+              "Есильский"
+            ],
+            "conditions": [
+              "pre_finish"
+            ],
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "d11",
+      "query": "двухкомнатная в Алматы с дизайнерским ремонтом или просто с ремонтом, не выше 60 миллионов",
+      "tags": [
+        "complex",
+        "multi_condition"
+      ],
+      "expected": {
+        "city": "Алматы",
+        "rooms": [
+          2
+        ],
+        "conditions": [
+          "designer",
+          "renovated"
+        ],
+        "price_max_kzt": 60000000
+      },
+      "semantic": "empty",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1845,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "sale",
+            "rooms": [
+              2
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": 60000000,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": [
+              "renovated",
+              "designer"
+            ],
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1214,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "sale",
+            "rooms": [
+              2
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": 60000000,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": [
+              "renovated",
+              "designer"
+            ],
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1258,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "sale",
+            "rooms": [
+              2
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": 60000000,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": [
+              "renovated",
+              "designer"
+            ],
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "d12",
+      "query": "квартра в астане черновая отделка 2 или 3 комнаты от 70 метров",
+      "tags": [
+        "complex",
+        "typo",
+        "area"
+      ],
+      "expected": {
+        "city": "Астана",
+        "rooms": [
+          2,
+          3
+        ],
+        "conditions": [
+          "rough"
+        ],
+        "area_min_m2": 70
+      },
+      "semantic": "empty",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1206,
+          "got": {
+            "city": "Астана",
+            "deal_type": "sale",
+            "rooms": [
+              2,
+              3
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": 70.0,
+            "districts": null,
+            "conditions": [
+              "rough"
+            ],
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1293,
+          "got": {
+            "city": "Астана",
+            "deal_type": "sale",
+            "rooms": [
+              2,
+              3
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": 70.0,
+            "districts": null,
+            "conditions": [
+              "rough"
+            ],
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1248,
+          "got": {
+            "city": "Астана",
+            "deal_type": "sale",
+            "rooms": [
+              2,
+              3
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": 70.0,
+            "districts": null,
+            "conditions": [
+              "rough"
+            ],
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "d13",
+      "query": "аренда, Медеуский р-н, 2-3 комн., мебель, паркинг, до 600 тыс",
+      "tags": [
+        "complex",
+        "abbrev",
+        "rent",
+        "features"
+      ],
+      "expected": {
+        "deal_type": "rent",
+        "city": "Алматы",
+        "districts": [
+          "Медеуский"
+        ],
+        "rooms": [
+          2,
+          3
+        ],
+        "features": [
+          "furnished",
+          "parking"
+        ],
+        "price_max_kzt": 600000
+      },
+      "semantic": "empty",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1665,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "rent",
+            "rooms": [
+              2,
+              3
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": 600000,
+            "area_min_m2": null,
+            "districts": [
+              "Медеуский"
+            ],
+            "conditions": null,
+            "features": [
+              "furnished",
+              "parking"
+            ],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 2126,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "rent",
+            "rooms": [
+              2,
+              3
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": 600000,
+            "area_min_m2": null,
+            "districts": [
+              "Медеуский"
+            ],
+            "conditions": null,
+            "features": [
+              "parking",
+              "furnished"
+            ],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1915,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "rent",
+            "rooms": [
+              2,
+              3
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": 600000,
+            "area_min_m2": null,
+            "districts": [
+              "Медеуский"
+            ],
+            "conditions": null,
+            "features": [
+              "parking",
+              "furnished"
+            ],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "d14",
+      "query": "купить однушку в Нура под ипотеку за 20-25 млн",
+      "tags": [
+        "complex",
+        "price_range",
+        "district_to_city"
+      ],
+      "expected": {
+        "city": "Астана",
+        "districts": [
+          "Нура"
+        ],
+        "rooms": [
+          1
+        ],
+        "features": [
+          "mortgage"
+        ],
+        "price_min_kzt": 20000000,
+        "price_max_kzt": 25000000
+      },
+      "semantic": "empty",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 2190,
+          "got": {
+            "city": "Астана",
+            "deal_type": "sale",
+            "rooms": [
+              1
+            ],
+            "price_min_kzt": 20000000,
+            "price_max_kzt": 25000000,
+            "area_min_m2": null,
+            "districts": [
+              "Нура"
+            ],
+            "conditions": null,
+            "features": [
+              "mortgage"
+            ],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 2241,
+          "got": {
+            "city": "Астана",
+            "deal_type": "sale",
+            "rooms": [
+              1
+            ],
+            "price_min_kzt": 20000000,
+            "price_max_kzt": 25000000,
+            "area_min_m2": null,
+            "districts": [
+              "Нура"
+            ],
+            "conditions": null,
+            "features": [
+              "mortgage"
+            ],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 2348,
+          "got": {
+            "city": "Астана",
+            "deal_type": "sale",
+            "rooms": [
+              1
+            ],
+            "price_min_kzt": 20000000,
+            "price_max_kzt": 25000000,
+            "area_min_m2": null,
+            "districts": [
+              "Нура"
+            ],
+            "conditions": null,
+            "features": [
+              "mortgage"
+            ],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "d15",
+      "query": "тихая квартира с видом на горы в Алматы",
+      "tags": [
+        "semantic"
+      ],
+      "expected": {
+        "city": "Алматы"
+      },
+      "semantic": "required",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1785,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "sale",
+            "rooms": null,
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [],
+            "semantic_query": "тихая квартира с видом на горы",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1318,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "sale",
+            "rooms": null,
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [],
+            "semantic_query": "тихая квартира с видом на горы",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 2072,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "sale",
+            "rooms": null,
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [],
+            "semantic_query": "тихая квартира с видом на горы",
+            "needs_clarification": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "d16",
+      "query": "светлая двушка рядом с парком для семьи с собакой в Астане",
+      "tags": [
+        "semantic"
+      ],
+      "expected": {
+        "city": "Астана",
+        "rooms": [
+          2
+        ]
+      },
+      "semantic": "required",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 2071,
+          "got": {
+            "city": "Астана",
+            "deal_type": "sale",
+            "rooms": [
+              2
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [],
+            "semantic_query": "светлая, рядом с парком, для семьи с собакой",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 2028,
+          "got": {
+            "city": "Астана",
+            "deal_type": "sale",
+            "rooms": [
+              2
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [],
+            "semantic_query": "светлая, рядом с парком, для семьи с собакой",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 2109,
+          "got": {
+            "city": "Астана",
+            "deal_type": "sale",
+            "rooms": [
+              2
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [],
+            "semantic_query": "светлая, рядом с парком, для семьи с собакой",
+            "needs_clarification": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "d17",
+      "query": "квартира в аренду рядом со школой, чтобы окна во двор, Алматы",
+      "tags": [
+        "semantic",
+        "rent",
+        "features"
+      ],
+      "expected": {
+        "deal_type": "rent",
+        "city": "Алматы",
+        "features": [
+          "near_school"
+        ]
+      },
+      "semantic": "required",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1859,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "rent",
+            "rooms": null,
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [
+              "near_school"
+            ],
+            "semantic_query": "окна во двор",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1343,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "rent",
+            "rooms": null,
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [
+              "near_school"
+            ],
+            "semantic_query": "окна во двор",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "deal_type": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "districts": true,
+            "conditions": true,
+            "features": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1298,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "rent",
+            "rooms": null,
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [
+              "near_school"
+            ],
+            "semantic_query": "окна во двор",
+            "needs_clarification": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "d18",
+      "query": "двушка у метро в Астане",
+      "tags": [
+        "edge",
+        "metro"
+      ],
+      "expected": {
+        "needs_clarification": true
+      },
+      "semantic": "any",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "needs_clarification": true
+          },
+          "error": null,
+          "latency_ms": 2107,
+          "got": {
+            "city": "Астана",
+            "deal_type": "sale",
+            "rooms": [
+              2
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": "В Астане нет метро. Показать двушки в Астане без условия про метро или выбрать другой район?"
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "needs_clarification": true
+          },
+          "error": null,
+          "latency_ms": 2334,
+          "got": {
+            "city": "Астана",
+            "deal_type": "sale",
+            "rooms": [
+              2
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": "В Астане нет метро. Показать квартиры в Астане с двумя комнатами без учёта метро или выбрать другой признак?"
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "needs_clarification": true
+          },
+          "error": null,
+          "latency_ms": 2684,
+          "got": {
+            "city": "Астана",
+            "deal_type": "sale",
+            "rooms": [
+              2
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": "В Астане метро нет. Показать двухкомнатные квартиры без привязки к метро или уточнить район?"
+          }
+        }
+      ]
+    },
+    {
+      "id": "d19",
+      "query": "какая погода завтра в Алматы",
+      "tags": [
+        "edge",
+        "off_topic"
+      ],
+      "expected": {
+        "needs_clarification": true
+      },
+      "semantic": "any",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "needs_clarification": true
+          },
+          "error": null,
+          "latency_ms": 1921,
+          "got": {
+            "city": null,
+            "deal_type": "sale",
+            "rooms": null,
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": "Я помогаю только с поиском недвижимости. Что вы хотите найти: квартиру или аренду в Алматы?"
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "needs_clarification": true
+          },
+          "error": null,
+          "latency_ms": 1280,
+          "got": {
+            "city": null,
+            "deal_type": "sale",
+            "rooms": null,
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": "Я ищу только недвижимость. Какую квартиру или дом вы хотите найти в Алматы?"
+          }
+        },
+        {
+          "ok": true,
+          "checks": {
+            "needs_clarification": true
+          },
+          "error": null,
+          "latency_ms": 1792,
+          "got": {
+            "city": null,
+            "deal_type": "sale",
+            "rooms": null,
+            "price_min_kzt": null,
+            "price_max_kzt": null,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": "Я ищу только недвижимость. Какую квартиру или дом вы хотите найти в Алматы?"
+          }
+        }
+      ]
+    },
+    {
+      "id": "d20",
+      "query": "трёхкомнатная в Алматы за 3 миллиона тенге",
+      "tags": [
+        "edge",
+        "impossible_price"
+      ],
+      "expected": {
+        "needs_clarification": true
+      },
+      "semantic": "any",
+      "success_rate": 0.0,
+      "runs": [
+        {
+          "ok": false,
+          "checks": {
+            "needs_clarification": false
+          },
+          "error": null,
+          "latency_ms": 3212,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "sale",
+            "rooms": [
+              3
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": 3000000,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": false,
+          "checks": {
+            "needs_clarification": false
+          },
+          "error": null,
+          "latency_ms": 2887,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "sale",
+            "rooms": [
+              3
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": 3000000,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        },
+        {
+          "ok": false,
+          "checks": {
+            "needs_clarification": false
+          },
+          "error": null,
+          "latency_ms": 3479,
+          "got": {
+            "city": "Алматы",
+            "deal_type": "sale",
+            "rooms": [
+              3
+            ],
+            "price_min_kzt": null,
+            "price_max_kzt": 3000000,
+            "area_min_m2": null,
+            "districts": null,
+            "conditions": null,
+            "features": [],
+            "semantic_query": "",
+            "needs_clarification": null
+          }
+        }
+      ]
+    }
+  ]
+}
