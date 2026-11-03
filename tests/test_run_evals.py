@@ -1,5 +1,5 @@
-from evals.run_evals import compare_filters, summarize
 from app.schemas import SearchFilters
+from evals.run_evals import compare_filters, summarize
 
 
 def case(expected: dict, semantic: str = "empty") -> dict:
@@ -35,12 +35,28 @@ def test_clarification_checks_only_that_question_was_asked():
     assert compare_filters(SearchFilters(needs_clarification="?"), case({}))["needs_clarification"] is False
 
 
-def test_summarize_by_field_and_tag():
-    rs = [
-        {"ok": True, "checks": {"city": True}, "tags": ["simple"], "error": None, "latency_ms": 100},
-        {"ok": False, "checks": {"city": False}, "tags": ["simple", "slang"], "error": None, "latency_ms": 300},
+def run(ok: bool, latency: int = 100) -> dict:
+    return {"ok": ok, "checks": {"city": ok}, "error": None, "latency_ms": latency}
+
+
+def test_summarize_repeats_mean_spread_and_flaky():
+    cases = [
+        {"id": "a", "tags": ["simple"], "success_rate": 1.0, "runs": [run(True), run(True), run(True)]},
+        {"id": "b", "tags": ["simple", "slang"], "success_rate": 1 / 3,
+         "runs": [run(True, 300), run(False), run(False)]},
     ]
-    s = summarize(rs)
-    assert s["fully_correct"] == 0.5 and s["by_field"]["city"] == 0.5
-    assert s["by_tag"]["slang"] == {"n": 1, "fully_correct": 0.0}
-    assert s["latency_ms"]["p50"] == 200
+    s = summarize(cases)
+    assert s["repeats"] == 3
+    assert s["fully_correct"]["per_repeat"] == [1.0, 0.5, 0.5]
+    assert s["fully_correct"]["mean"] == 0.667 and s["fully_correct"]["stdev"] == 0.289
+    assert s["fully_correct"]["min"] == 0.5 and s["fully_correct"]["max"] == 1.0
+    assert s["flaky"] == ["b"]
+    assert s["by_field"]["city"] == 0.667
+    assert s["by_tag"]["slang"] == {"n": 1, "success_rate": 0.333}
+    assert s["by_tag"]["simple"]["success_rate"] == 0.667
+    assert s["latency_ms"]["p50"] == 100
+
+
+def test_summarize_single_repeat_has_zero_spread():
+    s = summarize([{"id": "a", "tags": ["t"], "success_rate": 0.0, "runs": [run(False)]}])
+    assert s["fully_correct"]["stdev"] == 0.0 and s["flaky"] == []

@@ -47,23 +47,31 @@ def compare_filters(got: SearchFilters, case: dict) -> dict[str, bool]:
     return checks
 
 
-def summarize(results: list[dict]) -> dict:
-    def rate(rows: list[dict]) -> float:
-        return round(sum(r["ok"] for r in rows) / len(rows), 3) if rows else 0.0
+def summarize(cases: list[dict]) -> dict:
+    """cases: [{id, tags, runs: [{ok, checks, error, latency_ms, ...}]}], у всех одинаковое число runs."""
+    repeats = len(cases[0]["runs"])
+    per_repeat = [round(sum(c["runs"][i]["ok"] for c in cases) / len(cases), 3) for i in range(repeats)]
+    runs = [r for c in cases for r in c["runs"]]
 
     fields: dict[str, list[bool]] = {}
-    for r in results:
+    for r in runs:
         for f, ok in r["checks"].items():
             fields.setdefault(f, []).append(ok)
-    tags = sorted({t for r in results for t in r["tags"]})
-    lat = sorted(r["latency_ms"] for r in results)
+    tags = sorted({t for c in cases for t in c["tags"]})
+    lat = sorted(r["latency_ms"] for r in runs)
     return {
-        "cases": len(results),
-        "fully_correct": rate(results),
-        "errors": sum(r["error"] is not None for r in results),
+        "cases": len(cases),
+        "repeats": repeats,
+        "fully_correct": {
+            "mean": round(statistics.fmean(per_repeat), 3),
+            "stdev": round(statistics.stdev(per_repeat), 3) if repeats > 1 else 0.0,
+            "min": min(per_repeat), "max": max(per_repeat), "per_repeat": per_repeat,
+        },
+        "flaky": [c["id"] for c in cases if 0 < c["success_rate"] < 1],
+        "errors": sum(r["error"] is not None for r in runs),
         "by_field": {f: round(sum(v) / len(v), 3) for f, v in fields.items()},
-        "by_tag": {t: {"n": len(rs), "fully_correct": rate(rs)}
-                   for t in tags for rs in [[r for r in results if t in r["tags"]]]},
+        "by_tag": {t: {"n": len(cs), "success_rate": round(statistics.fmean(c["success_rate"] for c in cs), 3)}
+                   for t in tags for cs in [[c for c in cases if t in c["tags"]]]},
         "latency_ms": {"p50": int(statistics.median(lat)), "p95": lat[min(len(lat) - 1, int(len(lat) * 0.95))]},
     }
 
@@ -73,14 +81,12 @@ def run_case(case: dict, cfg, settings) -> dict:
     try:
         got = parse_query(case["query"], cfg, settings)
         error = None
-    except Exception as e:  # noqa: BLE001 — упавший кейс = неверный, прогон продолжается
+    except Exception as e:  # noqa: BLE001 — упавший прогон = неверный, eval продолжается
         got, error = None, f"{e.__class__.__name__}: {e}"
     latency = int((time.perf_counter() - t) * 1000)
     checks = compare_filters(got, case) if got else {"error": False}
     return {
-        "id": case["id"], "query": case["query"], "tags": case["tags"],
         "ok": all(checks.values()), "checks": checks, "error": error, "latency_ms": latency,
-        "expected": case["expected_filters"], "semantic": case["semantic"],
         "got": got.model_dump(exclude_defaults=True) if got else None,
     }
 
@@ -89,6 +95,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="config/demo.yaml")
     ap.add_argument("--split", default="dev", choices=["dev", "holdout"])
+    ap.add_argument("--repeats", type=int, default=1, help="прогонов на кейс: оценка разброса")
     ap.add_argument("--workers", type=int, default=4)
     args = ap.parse_args()
 
@@ -99,8 +106,17 @@ def main() -> None:
     if not cases:
         raise SystemExit(f"no cases with split={args.split}")
 
+    jobs = [c for c in cases for _ in range(args.repeats)]
     with ThreadPoolExecutor(args.workers) as pool:
-        results = list(pool.map(lambda c: run_case(c, cfg, settings), cases))
+        runs = list(pool.map(lambda c: run_case(c, cfg, settings), jobs))
+    results = []
+    for i, c in enumerate(cases):
+        rs = runs[i * args.repeats:(i + 1) * args.repeats]
+        results.append({
+            "id": c["id"], "query": c["query"], "tags": c["tags"],
+            "expected": c["expected_filters"], "semantic": c["semantic"],
+            "success_rate": round(sum(r["ok"] for r in rs) / len(rs), 3), "runs": rs,
+        })
 
     summary = summarize(results)
     prompt = (PROMPTS_DIR / PROMPT_FILE).read_bytes()
@@ -111,22 +127,24 @@ def main() -> None:
         "prompt": PROMPT_FILE, "prompt_sha": hashlib.sha256(prompt).hexdigest()[:12],
         "summary": summary, "results": results,
     }
-    out = ROOT / "results" / f"{now:%Y%m%dT%H%M%SZ}_parse_{args.split}.json"
+    out = ROOT / "results" / f"{now:%Y%m%dT%H%M%SZ}_parse_{args.split}_x{args.repeats}.json"
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    print(f"parse/{args.split}: {summary['fully_correct']:.0%} fully correct "
-          f"({summary['cases']} cases, {summary['errors']} errors), "
+    fc = summary["fully_correct"]
+    print(f"parse/{args.split} x{args.repeats}: fully correct {fc['mean']:.0%} ± {fc['stdev']:.0%} "
+          f"(min {fc['min']:.0%}, max {fc['max']:.0%}; {summary['cases']} cases, {summary['errors']} errors), "
           f"p50 {summary['latency_ms']['p50']} ms, p95 {summary['latency_ms']['p95']} ms")
     for f, acc in summary["by_field"].items():
         print(f"  field {f:20} {acc:.0%}")
     for t, s in summary["by_tag"].items():
-        print(f"  tag   {t:20} {s['fully_correct']:.0%} (n={s['n']})")
+        print(f"  tag   {t:20} {s['success_rate']:.0%} (n={s['n']})")
     for r in results:
-        if not r["ok"]:
-            bad = [f for f, ok in r["checks"].items() if not ok]
-            print(f"  FAIL {r['id']} {bad} {r['error'] or ''}\n       expected {r['expected']}\n       got      {r['got']}")
+        if r["success_rate"] < 1:
+            bad_runs = [x for x in r["runs"] if not x["ok"]]
+            bad = sorted({f for x in bad_runs for f, ok in x["checks"].items() if not ok})
+            print(f"  FAIL {r['id']} {r['success_rate']:.0%} ok, fields {bad} {bad_runs[0]['error'] or ''}"
+                  f"\n       expected {r['expected']}\n       got      {bad_runs[0]['got']}")
     print(f"report: {out.relative_to(ROOT.parent)}")
-
 
 if __name__ == "__main__":
     main()
