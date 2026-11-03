@@ -60,3 +60,17 @@ def test_summarize_repeats_mean_spread_and_flaky():
 def test_summarize_single_repeat_has_zero_spread():
     s = summarize([{"id": "a", "tags": ["t"], "success_rate": 0.0, "runs": [run(False)]}])
     assert s["fully_correct"]["stdev"] == 0.0 and s["flaky"] == []
+
+
+def test_run_case_reports_got_without_defaults(monkeypatch):
+    from app.config import Settings, load_config
+    from app.schemas import build_parser_schema
+    from evals import run_evals
+
+    cfg = load_config("config/demo.yaml")
+    empty = {k: v for k, v in SearchFilters().model_dump().items()}
+    monkeypatch.setattr(run_evals, "parse_query",
+                        lambda q, c, s: build_parser_schema(cfg)(**{**empty, "city": "Алматы"}))
+    r = run_evals.run_case({"query": "q", "expected_filters": {"city": "Алматы"}, "semantic": "empty"},
+                           cfg, Settings())
+    assert r["ok"] and r["got"] == {"city": "Алматы"}

@@ -87,7 +87,8 @@ def run_case(case: dict, cfg, settings) -> dict:
     checks = compare_filters(got, case) if got else {"error": False}
     return {
         "ok": all(checks.values()), "checks": checks, "error": error, "latency_ms": latency,
-        "got": got.model_dump(exclude_defaults=True) if got else None,
+        # относительно SearchFilters: у схемы для LLM дефолтов нет, exclude_defaults не сработал бы
+        "got": {k: v for k, v in got.model_dump().items() if _norm(v) != _norm(DEFAULTS[k])} if got else None,
     }
 
 
