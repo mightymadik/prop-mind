@@ -13,7 +13,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, create_model
 
 from app.config import AppConfig, get_settings, load_config
-from app.llm.client import call_tool, load_prompt
+from app.llm.client import call_structured, load_prompt
 from app.schemas import Condition, DealType
 
 BATCH = 50
@@ -52,7 +52,6 @@ def main() -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     done = sum(1 for line in out.open(encoding="utf-8") if line.strip()) if out.exists() else 0
     Batch = batch_model(cfg)
-    schema = Batch.model_json_schema()
     system = load_prompt("generate_listings.md")
 
     # ponytail: последовательно, ~50 вызовов на 2500 объектов; распараллелить, если станет долго
@@ -65,17 +64,14 @@ def main() -> None:
             f"Районы (распредели между ними): {', '.join(cfg.districts[city])}. "
             f"Допустимые признаки features: {', '.join(cfg.features)}."
         )
-        data = call_tool(
+        batch = call_structured(
             api_key=settings.anthropic_api_key,
             model=cfg.models["generator"],
             system=system,
             user=user,
-            tool_name="save_listings",
-            tool_description="Сохранить сгенерированные объявления",
-            input_schema=schema,
+            output=Batch,
             max_tokens=32000,
         )
-        batch = Batch.model_validate(data)
         with out.open("a", encoding="utf-8") as f:
             for item in batch.listings:
                 done += 1

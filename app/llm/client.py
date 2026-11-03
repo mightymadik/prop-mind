@@ -1,32 +1,35 @@
 """Единственное место, которое знает о провайдере LLM."""
 
 from pathlib import Path
-from typing import Any
+from typing import TypeVar
 
 import anthropic
+from pydantic import BaseModel
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
+
+T = TypeVar("T", bound=BaseModel)
 
 
 def load_prompt(name: str) -> str:
     return (PROMPTS_DIR / name).read_text(encoding="utf-8")
 
 
-def call_tool(
+def call_structured(
     *,
     api_key: str,
     model: str,
     system: str,
     user: str,
-    tool_name: str,
-    tool_description: str,
-    input_schema: dict[str, Any],
+    output: type[T],
     max_tokens: int = 1024,
     client: anthropic.Anthropic | None = None,
-) -> dict[str, Any]:
-    """Принудительный вызов инструмента → его input (надёжный способ получить JSON).
+) -> T:
+    """Ответ строго по схеме Pydantic-модели (structured outputs), уже провалидированный.
 
+    SDK сам приводит схему к требованиям API (additionalProperties: false и т. п.).
     Без temperature/top_p/top_k: API 2026-10-21 их отклоняет, SDK 2.x не принимает.
+    Без принудительного tool_choice: актуальные модели отвечают на него 400.
     Стрим: SDK отказывается от нестримовых запросов с большим max_tokens.
     """
     client = client or anthropic.Anthropic(api_key=api_key or None)
@@ -34,9 +37,11 @@ def call_tool(
         model=model,
         max_tokens=max_tokens,
         system=system,
-        tools=[{"name": tool_name, "description": tool_description, "input_schema": input_schema}],
-        tool_choice={"type": "tool", "name": tool_name},
+        output_format=output,
         messages=[{"role": "user", "content": user}],
     ) as stream:
-        resp = stream.get_final_message()
-    return next(b for b in resp.content if b.type == "tool_use").input
+        msg = stream.get_final_message()
+    # обрезанный JSON или текст отказа SDK сам отвергает ValidationError; тут — ответ без текста
+    if msg.parsed_output is None:
+        raise RuntimeError(f"no structured output: stop_reason={msg.stop_reason}")
+    return msg.parsed_output
