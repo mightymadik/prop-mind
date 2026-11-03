@@ -36,9 +36,12 @@ FIELD = "relevant_source_ids"
 def parse_selection(text: str, n: int) -> list[int]:
     """«1,4,7-9» → [1, 4, 7, 8, 9] (номера с 1). ValueError на мусор и номера вне 1..n."""
     picked: set[int] = set()
-    for part in text.replace(" ", "").split(","):
+    text = text.replace(" ", "")
+    if not text:
+        return []
+    for part in text.split(","):
         if not part:
-            continue
+            raise ValueError("пустой элемент между запятыми")
         lo, _, hi = part.partition("-")
         a, b = int(lo), int(hi or lo)
         if not 1 <= a <= b <= n:
@@ -138,6 +141,39 @@ def candidates(conn, case: dict, cfg, api_key: str) -> tuple[int, list[tuple]]:
     return total, [rows[i] for i in ids]
 
 
+def format_row(i: int, row: tuple) -> str:
+    """Строка таблицы кандидата; её же повторяет «? N» — чтобы сверять по хешу и комнатам."""
+    sid, price, rooms, area, district, cond, feats, desc = row
+    return (
+        f"  {i:>2} {ref(sid)} {fmt_price(price):>9} {rooms or '-'}к {area or '-':>5}м² "
+        f"{district or '-':<13} {cond or '-':<10} {','.join(feats) or '-':<22} {desc[:80]}"
+    )
+
+
+def ask(case_id: str, rows: list[tuple], read=input, write=print) -> list[str] | str:
+    """Диалог по одному кейсу → выбранные source_id, либо "s" / "q". Сохранение — только после подтверждения."""
+    while True:
+        answer = read(f"  {case_id} — подходящие (1,4,7-9 / пусто = нет / ? N / s / q): ").strip()
+        if answer in ("s", "q"):
+            return answer
+        if answer.startswith("?"):
+            k = pick_one(answer[1:], len(rows))
+            if k:
+                write(f"  {case_id}, кандидат {k}:\n{format_row(k, rows[k - 1])}\n      {rows[k - 1][-1]}")
+            else:
+                write(f"  ошибка: нужен один номер 1..{len(rows)}")
+            continue
+        try:
+            picked = parse_selection(answer, len(rows))
+        except ValueError as e:
+            write(f"  ошибка: {e}")
+            continue
+        chosen = ", ".join(f"{i} ({ref(rows[i - 1][0])})" for i in picked) or "ничего — подходящих нет"
+        write(f"  {case_id}: отмечено {chosen}")
+        if not read("  сохранить? Enter — да, любой другой ввод — выбрать заново: ").strip():
+            return [rows[i - 1][0] for i in picked]
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="config/demo.yaml")
@@ -160,32 +196,16 @@ def main() -> None:
             total, rows = candidates(conn, case, cfg, api_key)
             print(f"[{n}/{len(todo)}] {case['id']}: {case['query']}")
             print(f"  фильтры: {case['expected_filters']}  | под фильтры подходит объектов: {total}")
-            for i, (sid, price, rooms, area, district, cond, feats, desc) in enumerate(rows, 1):
-                print(
-                    f"  {i:>2} {ref(sid)} {fmt_price(price):>9} {rooms or '-'}к {area or '-':>5}м² "
-                    f"{district or '-':<13} {cond or '-':<10} {','.join(feats) or '-':<22} {desc[:80]}"
-                )
-            while True:
-                answer = input("  подходящие (1,4,7-9 / пусто = нет / ? N / s / q): ").strip()
-                if answer in ("s", "q"):
-                    break
-                if answer.startswith("?"):
-                    k = pick_one(answer[1:], len(rows))
-                    print(f"  {k}: {rows[k - 1][-1]}" if k else f"  ошибка: нужен один номер 1..{len(rows)}")
-                    continue
-                try:
-                    picked = parse_selection(answer, len(rows))
-                    break
-                except ValueError as e:
-                    print(f"  ошибка: {e}")
-            if answer == "q":
+            for i, row in enumerate(rows, 1):
+                print(format_row(i, row))
+            result = ask(case["id"], rows)
+            if result == "q":
                 break
-            if answer == "s":
+            if result == "s":
                 continue
-            ids = [rows[i - 1][0] for i in picked]
             lines = CASES.open(encoding="utf-8").readlines()
-            CASES.write_text("".join(set_labels(lines, case["id"], ids, "manual")), encoding="utf-8")
-            print(f"  записано: {len(ids)} шт.\n")
+            CASES.write_text("".join(set_labels(lines, case["id"], result, "manual")), encoding="utf-8")
+            print(f"  {case['id']}: записано {len(result)} шт.\n")
 
 
 if __name__ == "__main__":

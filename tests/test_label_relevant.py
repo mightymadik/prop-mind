@@ -3,6 +3,8 @@ import json
 import pytest
 
 from scripts.label_relevant import (
+    ask,
+    format_row,
     interleave,
     labeling_mode,
     needs_labels,
@@ -17,7 +19,7 @@ def test_parse_selection():
     assert parse_selection("1,4,7-9", 30) == [1, 4, 7, 8, 9]
     assert parse_selection(" 3 , 3,2-3 ", 5) == [2, 3]
     assert parse_selection("", 5) == []
-    for bad in ("0", "31", "5-2", "a", "1-x"):
+    for bad in ("0", "31", "5-2", "a", "1-x", ", 1", "1,,2", "1,"):
         with pytest.raises(ValueError):
             parse_selection(bad, 30)
 
@@ -67,3 +69,55 @@ def test_pick_one():
     assert pick_one(" 2", 3) == 2
     for bad in ("", "0", "4", "1-2", "x", "1,2"):
         assert pick_one(bad, 3) is None
+
+
+ROWS = [
+    (
+        "syn-00324",
+        45_000_000,
+        2,
+        64.0,
+        "Бостандыкский",
+        "renovated",
+        [],
+        "Двушка с большой кухней-гостиной, вид на горы",
+    ),
+    ("syn-00096", 61_000_000, 3, 92.0, "Медеуский", "renovated", ["parking"], "Продам 3-комнатную в ЖК Нурлы Тау"),
+    ("seed-d15-01", 70_000_000, 4, 120.0, "Медеуский", "designer", [], "Четырёхкомнатная с террасой"),
+]
+
+
+def dialog(inputs: list[str]) -> tuple[list[str] | str, list[str]]:
+    it, out = iter(inputs), []
+    return ask("d15", ROWS, read=lambda _: next(it), write=out.append), out
+
+
+def test_detail_shows_same_object_as_table_row():
+    for k, row in enumerate(ROWS, 1):
+        result, out = dialog([f"? {k}", "q"])
+        detail = out[0].splitlines()
+        assert result == "q"
+        assert detail[0] == "  d15, кандидат " + str(k) + ":"
+        assert detail[1] == format_row(k, row)  # та же строка таблицы: хеш, комнаты, цена
+        assert detail[2].strip() == row[-1]
+        others = [ref(r[0]) for r in ROWS if r is not row]
+        assert not any(h in out[0] for h in others)
+
+
+def test_selection_saved_only_after_confirmation():
+    result, out = dialog(["2", "n", "1,3", ""])
+    assert result == ["syn-00324", "seed-d15-01"]
+    assert out == [
+        f"  d15: отмечено 2 ({ref('syn-00096')})",
+        f"  d15: отмечено 1 ({ref('syn-00324')}), 3 ({ref('seed-d15-01')})",
+    ]
+
+
+def test_empty_answer_means_none_after_confirmation():
+    result, out = dialog(["", ""])
+    assert result == [] and out == ["  d15: отмечено ничего — подходящих нет"]
+
+
+def test_bad_input_does_not_save():
+    result, out = dialog([", 2", "? 9", "s"])
+    assert result == "s" and out[0].startswith("  ошибка") and out[1].startswith("  ошибка")
