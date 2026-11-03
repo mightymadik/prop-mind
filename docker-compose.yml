@@ -1,0 +1,30 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: prop
+      POSTGRES_PASSWORD: prop
+      POSTGRES_DB: prop
+    ports: ["${DB_PORT:-5432}:5432"]  # занят локальным Postgres → DB_PORT=55432 в .env
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prop -d prop"]
+      interval: 2s
+      retries: 30
+
+  api:
+    build: .
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql://prop:prop@db:5432/prop
+    ports: ["8000:8000"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
