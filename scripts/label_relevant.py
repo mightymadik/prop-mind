@@ -1,16 +1,23 @@
-"""Ручная разметка relevant_source_ids для evals/cases.jsonl. Правила — docs/labeling.md.
+"""Разметка relevant_source_ids для evals/cases.jsonl. Правила — docs/labeling.md.
+
+semantic: empty — автоматически: все объекты, проходящие expected_filters (пересчитывается
+при каждом запуске, "relevance": "auto"). semantic: required — вручную ("relevance": "manual").
+Кейсы с уточнением не размечаются.
 
 Кандидаты — пул из двух методов внутри эталонных фильтров кейса (expected_filters, без парсера):
 топ по векторам и топ по полнотекстовому поиску, по очереди, без повторов, до 30 штук.
-Метод кандидата не показывается, порядок перемешан — чтобы разметка не тянулась к одному методу.
+Метод кандидата и source_id не показываются (вместо него короткий хеш), порядок перемешан —
+чтобы разметка не тянулась к одному методу и не выдавала подложенные объекты (seed-*).
 
     python scripts/label_relevant.py --config config/demo.yaml
     python scripts/label_relevant.py --config config/demo.yaml --relabel d08
 
-Ввод: номера подходящих «1,4,7-9»; пустая строка — подходящих нет; s — пропустить; q — выйти.
+Ввод: номера подходящих «1,4,7-9»; пустая строка — подходящих нет; «? N» — полное описание
+кандидата N; s — пропустить; q — выйти.
 """
 
 import argparse
+import hashlib
 import json
 import random
 from pathlib import Path
@@ -40,6 +47,12 @@ def parse_selection(text: str, n: int) -> list[int]:
     return sorted(picked)
 
 
+def pick_one(text: str, n: int) -> int | None:
+    """«3» → 3; пусто, диапазон, мусор или номер вне 1..n → None."""
+    text = text.strip()
+    return int(text) if text.isdigit() and 1 <= int(text) <= n else None
+
+
 def interleave(*ranked: list[str], limit: int) -> list[str]:
     """Пул: по очереди из каждого списка, без повторов, не больше limit."""
     out: list[str] = []
@@ -50,22 +63,46 @@ def interleave(*ranked: list[str], limit: int) -> list[str]:
     return out[:limit]
 
 
-def set_labels(lines: list[str], case_id: str, ids: list[str]) -> list[str]:
+def set_labels(lines: list[str], case_id: str, ids: list[str], relevance: str) -> list[str]:
     """Переписывает только строку нужного кейса; остальные строки остаются байт в байт."""
     out = []
     for line in lines:
         if line.strip() and json.loads(line)["id"] == case_id:
             case = json.loads(line)
-            case[FIELD] = sorted(ids)
-            line = json.dumps(case, ensure_ascii=False) + "\n"
+            if case.get(FIELD) != sorted(ids) or case.get("relevance") != relevance:
+                case[FIELD] = sorted(ids)
+                case["relevance"] = relevance
+                line = json.dumps(case, ensure_ascii=False) + "\n"
         out.append(line)
     return out
 
 
-def needs_labels(case: dict, relabel: str | None) -> bool:
+def labeling_mode(case: dict) -> str | None:
+    """auto — эталон = все объекты под фильтрами; manual — размечает человек; None — не размечаем."""
     if case["expected_filters"].get("needs_clarification"):
+        return None
+    return {"empty": "auto", "required": "manual"}.get(case["semantic"])
+
+
+def needs_labels(case: dict, relabel: str | None) -> bool:
+    if labeling_mode(case) != "manual":
         return False
     return case["id"] == relabel if relabel else FIELD not in case
+
+
+def auto_labels(conn, cases: list[dict]) -> dict[str, list[str]]:
+    """Для semantic: empty — все source_id, проходящие expected_filters."""
+    out = {}
+    for c in cases:
+        if labeling_mode(c) == "auto":
+            where, params = where_from_filters(SearchFilters.model_validate(c["expected_filters"]))
+            out[c["id"]] = [r[0] for r in conn.execute(f"SELECT source_id FROM listings WHERE {where}", params)]
+    return out
+
+
+def ref(source_id: str) -> str:
+    """Короткая нейтральная метка вместо source_id: по ней не видно, подложен ли объект."""
+    return hashlib.sha1(source_id.encode()).hexdigest()[:6]
 
 
 def fmt_price(p: int) -> str:
@@ -109,24 +146,33 @@ def main() -> None:
     cfg = load_config(args.config)
     api_key = get_settings().voyage_api_key
 
-    todo = [
-        c for c in map(json.loads, filter(str.strip, CASES.open(encoding="utf-8"))) if needs_labels(c, args.relabel)
-    ]
-    print(f"к разметке: {len(todo)} кейсов. Правила: docs/labeling.md\n")
+    cases = [json.loads(ln) for ln in CASES.open(encoding="utf-8") if ln.strip()]
+    todo = [c for c in cases if needs_labels(c, args.relabel)]
     with connect() as conn:
+        lines = CASES.open(encoding="utf-8").readlines()
+        auto = auto_labels(conn, cases)
+        for cid, ids in auto.items():
+            lines = set_labels(lines, cid, ids, "auto")
+        CASES.write_text("".join(lines), encoding="utf-8")
+        print("авто (все объекты под фильтрами): " + ", ".join(f"{k}={len(v)}" for k, v in auto.items()))
+        print(f"к ручной разметке: {len(todo)} кейсов. Правила: docs/labeling.md\n")
         for n, case in enumerate(todo, 1):
             total, rows = candidates(conn, case, cfg, api_key)
             print(f"[{n}/{len(todo)}] {case['id']}: {case['query']}")
             print(f"  фильтры: {case['expected_filters']}  | под фильтры подходит объектов: {total}")
             for i, (sid, price, rooms, area, district, cond, feats, desc) in enumerate(rows, 1):
                 print(
-                    f"  {i:>2} {sid} {fmt_price(price):>9} {rooms or '-'}к {area or '-':>5}м² "
+                    f"  {i:>2} {ref(sid)} {fmt_price(price):>9} {rooms or '-'}к {area or '-':>5}м² "
                     f"{district or '-':<13} {cond or '-':<10} {','.join(feats) or '-':<22} {desc[:80]}"
                 )
             while True:
-                answer = input("  подходящие (1,4,7-9 / пусто = нет / s / q): ").strip()
+                answer = input("  подходящие (1,4,7-9 / пусто = нет / ? N / s / q): ").strip()
                 if answer in ("s", "q"):
                     break
+                if answer.startswith("?"):
+                    k = pick_one(answer[1:], len(rows))
+                    print(f"  {k}: {rows[k - 1][-1]}" if k else f"  ошибка: нужен один номер 1..{len(rows)}")
+                    continue
                 try:
                     picked = parse_selection(answer, len(rows))
                     break
@@ -138,7 +184,7 @@ def main() -> None:
                 continue
             ids = [rows[i - 1][0] for i in picked]
             lines = CASES.open(encoding="utf-8").readlines()
-            CASES.write_text("".join(set_labels(lines, case["id"], ids)), encoding="utf-8")
+            CASES.write_text("".join(set_labels(lines, case["id"], ids, "manual")), encoding="utf-8")
             print(f"  записано: {len(ids)} шт.\n")
 
 
