@@ -46,20 +46,18 @@ class SearchFilters(BaseModel):
 
 
 def build_parser_schema(cfg: AppConfig) -> type[SearchFilters]:
-    """Подкласс SearchFilters, где город, районы и признаки — Literal из конфига. Только для LLM."""
-    base = SearchFilters.model_fields
+    """Подкласс SearchFilters только для LLM.
 
-    def narrowed(name: str, annotation: object, default: object = None) -> tuple:
-        kw = {"default_factory": list} if default is list else {"default": default}
-        return annotation, Field(description=base[name].description, **kw)
-
+    - город, районы и признаки — Literal из конфига;
+    - все поля обязательны (без default): модель явно решает по каждому полю,
+      а «нет фильтра» пишет как null / [] / "". Иначе она молча пропускает ключи.
+    """
     City = Literal[tuple(cfg.cities)]  # type: ignore[valid-type]
     District = Literal[tuple(dict.fromkeys(d for ds in cfg.districts.values() for d in ds))]  # type: ignore[valid-type]
     Feature = Literal[tuple(cfg.features)]  # type: ignore[valid-type]
-    return create_model(
-        "SearchFilters",
-        __base__=SearchFilters,
-        city=narrowed("city", City | None),
-        districts=narrowed("districts", list[District] | None),
-        features=narrowed("features", list[Feature], list),
-    )
+    narrowed = {"city": City | None, "districts": list[District] | None, "features": list[Feature]}
+    fields = {
+        name: (narrowed.get(name, f.annotation), Field(..., description=f.description))
+        for name, f in SearchFilters.model_fields.items()
+    }
+    return create_model("SearchFilters", __base__=SearchFilters, **fields)

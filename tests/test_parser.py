@@ -22,7 +22,7 @@ def test_parse_query_passes_config_and_retries_once(monkeypatch):
         calls.append(kw)
         if len(calls) == 1:
             raise RuntimeError("no structured output")
-        return kw["output"](city="Алматы")
+        return SearchFilters(city="Алматы")
 
     monkeypatch.setattr(parser, "call_structured", fake)
     f = parser.parse_query("двушка в Алматы", CFG, SETTINGS)
