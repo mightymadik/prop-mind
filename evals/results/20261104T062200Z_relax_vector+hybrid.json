@@ -1,0 +1,318 @@
+{
+  "layer": "relax",
+  "modes": [
+    "vector",
+    "hybrid"
+  ],
+  "date": "2026-11-04T06:22:00+00:00",
+  "summary": {
+    "vector": {
+      "cases": 6,
+      "relaxed_ok": 6,
+      "top_respects_remaining": 6
+    },
+    "hybrid": {
+      "cases": 6,
+      "relaxed_ok": 6,
+      "top_respects_remaining": 6
+    }
+  },
+  "results": {
+    "vector": [
+      {
+        "id": "r01",
+        "query": "двушка в Медеуском районе с дизайнерским ремонтом, новостройка",
+        "expected_relaxed": [
+          "features",
+          "conditions"
+        ],
+        "relaxed": [
+          "features",
+          "conditions"
+        ],
+        "relaxed_ok": true,
+        "n_results": 13,
+        "top_respects_remaining": true,
+        "top10": [
+          "syn-00805",
+          "syn-00954",
+          "syn-00272",
+          "syn-00321",
+          "syn-00658",
+          "syn-00758",
+          "seed-h05-06",
+          "syn-00513",
+          "syn-00275",
+          "syn-00955"
+        ]
+      },
+      {
+        "id": "r02",
+        "query": "трёшка в Бостандыкском, предчистовая, рядом школа",
+        "expected_relaxed": [
+          "features"
+        ],
+        "relaxed": [
+          "features"
+        ],
+        "relaxed_ok": true,
+        "n_results": 3,
+        "top_respects_remaining": true,
+        "top10": [
+          "seed-h04-02",
+          "syn-00262",
+          "syn-00795"
+        ]
+      },
+      {
+        "id": "r03",
+        "query": "сниму однушку в Алмалинском с мебелью и паркингом, после ремонта",
+        "expected_relaxed": [
+          "features"
+        ],
+        "relaxed": [
+          "features"
+        ],
+        "relaxed_ok": true,
+        "n_results": 5,
+        "top_respects_remaining": true,
+        "top10": [
+          "syn-00046",
+          "syn-00197",
+          "syn-00977",
+          "syn-00536",
+          "syn-00588"
+        ]
+      },
+      {
+        "id": "r04",
+        "query": "Есильский район, трёшка в черновой отделке под ипотеку",
+        "expected_relaxed": [
+          "features",
+          "conditions"
+        ],
+        "relaxed": [
+          "features",
+          "conditions"
+        ],
+        "relaxed_ok": true,
+        "n_results": 11,
+        "top_respects_remaining": true,
+        "top10": [
+          "syn-00445",
+          "seed-d10-03",
+          "seed-d10-01",
+          "seed-d10-04",
+          "seed-d10-02",
+          "syn-00440",
+          "syn-00902",
+          "seed-d10-08",
+          "seed-d10-05",
+          "syn-00886"
+        ]
+      },
+      {
+        "id": "r05",
+        "query": "пятикомнатная в Турксибском районе, с ремонтом и паркингом",
+        "expected_relaxed": [
+          "features",
+          "conditions",
+          "districts"
+        ],
+        "relaxed": [
+          "features",
+          "conditions",
+          "districts"
+        ],
+        "relaxed_ok": true,
+        "n_results": 14,
+        "top_respects_remaining": true,
+        "top10": [
+          "syn-00504",
+          "syn-00952",
+          "syn-00292",
+          "syn-00319",
+          "syn-00794",
+          "syn-00515",
+          "syn-00341",
+          "syn-00650",
+          "syn-00750",
+          "syn-00762"
+        ]
+      },
+      {
+        "id": "r06",
+        "query": "однушка у метро в Астане",
+        "expected_relaxed": [
+          "features"
+        ],
+        "relaxed": [
+          "features"
+        ],
+        "relaxed_ok": true,
+        "n_results": 34,
+        "top_respects_remaining": true,
+        "top10": [
+          "syn-00468",
+          "syn-00910",
+          "syn-00889",
+          "syn-00459",
+          "syn-00897",
+          "seed-d14-03",
+          "syn-00439",
+          "syn-00442",
+          "syn-00452",
+          "syn-00479"
+        ]
+      }
+    ],
+    "hybrid": [
+      {
+        "id": "r01",
+        "query": "двушка в Медеуском районе с дизайнерским ремонтом, новостройка",
+        "expected_relaxed": [
+          "features",
+          "conditions"
+        ],
+        "relaxed": [
+          "features",
+          "conditions"
+        ],
+        "relaxed_ok": true,
+        "n_results": 13,
+        "top_respects_remaining": true,
+        "top10": [
+          "syn-00805",
+          "syn-00954",
+          "seed-h05-06",
+          "syn-00513",
+          "syn-00272",
+          "syn-00321",
+          "syn-00324",
+          "syn-00658",
+          "syn-00955",
+          "syn-00275"
+        ]
+      },
+      {
+        "id": "r02",
+        "query": "трёшка в Бостандыкском, предчистовая, рядом школа",
+        "expected_relaxed": [
+          "features"
+        ],
+        "relaxed": [
+          "features"
+        ],
+        "relaxed_ok": true,
+        "n_results": 3,
+        "top_respects_remaining": true,
+        "top10": [
+          "syn-00262",
+          "seed-h04-02",
+          "syn-00795"
+        ]
+      },
+      {
+        "id": "r03",
+        "query": "сниму однушку в Алмалинском с мебелью и паркингом, после ремонта",
+        "expected_relaxed": [
+          "features"
+        ],
+        "relaxed": [
+          "features"
+        ],
+        "relaxed_ok": true,
+        "n_results": 5,
+        "top_respects_remaining": true,
+        "top10": [
+          "syn-00046",
+          "syn-00197",
+          "syn-00536",
+          "syn-00977",
+          "syn-00588"
+        ]
+      },
+      {
+        "id": "r04",
+        "query": "Есильский район, трёшка в черновой отделке под ипотеку",
+        "expected_relaxed": [
+          "features",
+          "conditions"
+        ],
+        "relaxed": [
+          "features",
+          "conditions"
+        ],
+        "relaxed_ok": true,
+        "n_results": 11,
+        "top_respects_remaining": true,
+        "top10": [
+          "seed-d10-01",
+          "syn-00445",
+          "seed-d10-04",
+          "seed-d10-03",
+          "seed-d10-02",
+          "seed-d10-05",
+          "syn-00440",
+          "seed-d10-08",
+          "syn-00878",
+          "syn-00902"
+        ]
+      },
+      {
+        "id": "r05",
+        "query": "пятикомнатная в Турксибском районе, с ремонтом и паркингом",
+        "expected_relaxed": [
+          "features",
+          "conditions",
+          "districts"
+        ],
+        "relaxed": [
+          "features",
+          "conditions",
+          "districts"
+        ],
+        "relaxed_ok": true,
+        "n_results": 14,
+        "top_respects_remaining": true,
+        "top10": [
+          "syn-00292",
+          "syn-00504",
+          "syn-00319",
+          "syn-00341",
+          "syn-00257",
+          "syn-00515",
+          "syn-00643",
+          "syn-00794",
+          "syn-00952",
+          "syn-00750"
+        ]
+      },
+      {
+        "id": "r06",
+        "query": "однушка у метро в Астане",
+        "expected_relaxed": [
+          "features"
+        ],
+        "relaxed": [
+          "features"
+        ],
+        "relaxed_ok": true,
+        "n_results": 34,
+        "top_respects_remaining": true,
+        "top10": [
+          "seed-d14-03",
+          "syn-00468",
+          "syn-00439",
+          "syn-00459",
+          "seed-d14-02",
+          "syn-00442",
+          "syn-00452",
+          "syn-00889",
+          "syn-00910",
+          "syn-00449"
+        ]
+      }
+    ]
+  }
+}
