@@ -113,3 +113,37 @@ def test_review_never_overwrites_existing_file(monkeypatch, tmp_path):
     with pytest.raises(SystemExit, match="не перезаписываю"):
         llm_label.review(CFG, Settings(), path=existing)
     assert existing.read_text(encoding="utf-8") == "проверено человеком"
+
+
+def test_unjudged_from_report_unions_modes_and_skips_judged_and_auto():
+    cases = [
+        {"id": "d15", "semantic": "required", "expected_filters": {}, "judged_source_ids": ["a", "b"]},
+        {"id": "d01", "semantic": "empty", "expected_filters": {}, "judged_source_ids": ["a"]},
+    ]
+    report = {
+        "results": {
+            "vector": [{"id": "d15", "top10": ["a", "x"]}, {"id": "d01", "top10": ["z"]}],
+            "hybrid": [{"id": "d15", "top10": ["y", "x", "b"]}],
+        }
+    }
+    assert llm_label.unjudged_from_report(report, cases) == {"d15": ["x", "y"]}
+
+
+def test_extend_prints_no_queries_or_decisions(monkeypatch, tmp_path, capsys):
+    cases = tmp_path / "cases.jsonl"
+    cases.write_text(
+        '{"id": "h06", "query": "СЕКРЕТНЫЙ ЗАПРОС", "semantic": "required", "expected_filters": {}, '
+        '"judged_source_ids": []}\n',
+        encoding="utf-8",
+    )
+    report = tmp_path / "report.json"
+    report.write_text('{"results": {"hybrid": [{"id": "h06", "top10": ["syn-00804", "syn-00812"]}]}}', encoding="utf-8")
+    monkeypatch.setattr(llm_label, "CASES", cases)
+    monkeypatch.setattr(llm_label, "connect", lambda: __import__("contextlib").nullcontext(None))
+    monkeypatch.setattr(llm_label, "rows_by_ids", lambda conn, ids: ROWS)
+    monkeypatch.setattr(llm_label, "decide", lambda c, rows, cfg, s, rules: decisions(True, False))
+    out = tmp_path / "extend.md"
+    llm_label.extend(CFG, Settings(), report, out)
+    printed = capsys.readouterr().out
+    assert "h06: на дооценку 2" in printed and "СЕКРЕТНЫЙ" not in printed and "причина" not in printed
+    assert "Проверено: нет" in out.read_text(encoding="utf-8")

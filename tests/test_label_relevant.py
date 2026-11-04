@@ -33,11 +33,29 @@ def test_interleave_alternates_dedupes_and_limits():
 def test_set_labels_rewrites_only_target_line():
     other = '{"id":"d01",  "query": "как есть"}\n'  # чужое форматирование не трогаем
     target = json.dumps({"id": "d02", "query": "q", "expected_filters": {}}, ensure_ascii=False) + "\n"
-    out = set_labels([other, target, "\n"], "d02", ["syn-00009", "syn-00002"], "auto")
+    ids = ["syn-00009", "syn-00002"]
+    out = set_labels([other, target, "\n"], "d02", ids, "auto", judged=ids + ["syn-00005"])
     assert out[0] == other and out[2] == "\n"
     case = json.loads(out[1])
     assert case["relevant_source_ids"] == ["syn-00002", "syn-00009"] and case["relevance"] == "auto"
-    assert set_labels(out, "d02", ["syn-00009", "syn-00002"], "auto") == out  # повторный прогон — без изменений
+    assert case["judged_source_ids"] == ["syn-00002", "syn-00005", "syn-00009"]
+    assert set_labels(out, "d02", ids, "auto", judged=ids + ["syn-00005"]) == out  # повтор — без изменений
+
+
+def test_set_labels_merge_adds_to_previous_labels():
+    line = json.dumps(
+        {"id": "d15", "relevant_source_ids": ["a"], "judged_source_ids": ["a", "b"], "relevance": "llm_reviewed"}
+    )
+    [merged] = set_labels([line + "\n"], "d15", ["c"], "llm_reviewed", judged=["c", "d"], merge=True)
+    case = json.loads(merged)
+    assert case["relevant_source_ids"] == ["a", "c"] and case["judged_source_ids"] == ["a", "b", "c", "d"]
+    [replaced] = set_labels([line + "\n"], "d15", ["c"], "llm_reviewed", judged=["c", "d"])
+    assert json.loads(replaced)["relevant_source_ids"] == ["c"]
+
+
+def test_set_labels_relevant_must_be_judged():
+    with pytest.raises(ValueError, match="оценённые"):
+        set_labels(['{"id": "d15"}\n'], "d15", ["x"], "manual", judged=["y"])
 
 
 def case(semantic: str, clarify: bool = False, **extra) -> dict:

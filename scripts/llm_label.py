@@ -11,6 +11,11 @@
 
 Новая партия кейсов — отдельным файлом, не трогая уже проверенные:
     python scripts/llm_label.py review --only d21 d22 --file evals/llm_labels_review_v2.md
+
+Дооценка: неразмеченные объекты топ-10 из отчёта поиска → короткий файл → apply --merge:
+    python scripts/llm_label.py extend --report evals/results/<...>_search_vector+hybrid_dev.json \
+        --file evals/llm_labels_extend_1.md
+    python scripts/llm_label.py apply --merge --file evals/llm_labels_extend_1.md
 """
 
 import argparse
@@ -164,34 +169,89 @@ def review(cfg, settings, only: list[str] | None = None, path: Path = REVIEW) ->
     print(f"готово: {path} — проверь, поправь и поставь «{REVIEWED_MARK}»")
 
 
-def apply(cfg, only: list[str] | None = None, path: Path = REVIEW) -> None:
+def unjudged_from_report(report: dict, cases: list[dict]) -> dict[str, list[str]]:
+    """Кейс → неразмеченные объекты из топ-10 всех методов отчёта (порядок первого появления, без повторов)."""
+    manual = {c["id"]: c for c in targets(cases)}
+    out: dict[str, list[str]] = {}
+    for results in report["results"].values():
+        for r in results:
+            if r["id"] not in manual:
+                continue
+            judged = set(manual[r["id"]].get("judged_source_ids", []))
+            for sid in r["top10"]:
+                if sid not in judged and sid not in out.setdefault(r["id"], []):
+                    out[r["id"]].append(sid)
+    return {k: v for k, v in out.items() if v}
+
+
+def rows_by_ids(conn, ids: list[str]) -> list[tuple]:
+    """Строки в формате пула кандидатов, в порядке ids."""
+    rows = {
+        r[0]: r
+        for r in conn.execute(
+            """SELECT source_id, price_kzt, rooms, area_m2, district, condition, features, description
+               FROM listings WHERE source_id = ANY(%s)""",
+            (ids,),
+        ).fetchall()
+    }
+    return [rows[i] for i in ids]
+
+
+def extend(cfg, settings, report_path: Path, path: Path) -> None:
+    if path.exists():
+        raise SystemExit(f"{path} уже есть — не перезаписываю проверенный файл; укажи другой --file")
+    cases = {c["id"]: c for c in (json.loads(ln) for ln in CASES.open(encoding="utf-8") if ln.strip())}
+    todo = unjudged_from_report(json.loads(report_path.read_text(encoding="utf-8")), list(cases.values()))
+    if not todo:
+        print("неразмеченных в топ-10 нет — дооценка не нужна")
+        return
+    rules = labeling_rules(RULES_DOC.read_text(encoding="utf-8"))
+    sections = []
+    with connect() as conn:
+        for cid, ids in todo.items():
+            rows = rows_by_ids(conn, ids)
+            sections.append((cases[cid], rows, decide(cases[cid], rows, cfg, settings, rules)))
+            print(f"{cid}: на дооценку {len(rows)}")  # без запроса и решений
+    path.write_text(render_review(sections, cfg.models["labeler"]), encoding="utf-8")
+    print(f"готово: {path} — проверь, поставь «{REVIEWED_MARK}», затем apply --merge --file {path}")
+
+
+def apply(cfg, only: list[str] | None = None, path: Path = REVIEW, merge: bool = False) -> None:
     decisions = parse_review(path.read_text(encoding="utf-8"))
     cases = [json.loads(ln) for ln in CASES.open(encoding="utf-8") if ln.strip()]
-    expected = {c["id"] for c in targets(cases, only)}
-    if set(decisions) != expected:
+    manual = {c["id"] for c in targets(cases)}
+    if merge:  # дооценка: в файле только кейсы, где были неразмеченные
+        if not set(decisions) <= manual:
+            raise SystemExit(f"не смысловые кейсы в файле: {sorted(set(decisions) - manual)}")
+    elif set(decisions) != (expected := {c["id"] for c in targets(cases, only)}):
         raise SystemExit(f"в файле кейсы {sorted(decisions)}, ожидались {sorted(expected)}")
     with connect() as conn:
         all_ids = [r[0] for r in conn.execute("SELECT source_id FROM listings")]
     sid = resolve_refs({h for d in decisions.values() for h in d}, all_ids)
     lines = CASES.open(encoding="utf-8").readlines()
     for case_id, d in decisions.items():
-        lines = set_labels(lines, case_id, [sid[h] for h, ok in d.items() if ok], RELEVANCE)
+        relevant = [sid[h] for h, ok in d.items() if ok]
+        lines = set_labels(lines, case_id, relevant, RELEVANCE, judged=[sid[h] for h in d], merge=merge)
     CASES.write_text("".join(lines), encoding="utf-8")
     print(f"перенесено в {CASES}: {len(decisions)} кейсов, relevance={RELEVANCE}")  # без решений
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("command", choices=["review", "apply"])
+    ap.add_argument("command", choices=["review", "extend", "apply"])
+    ap.add_argument("--report", type=Path, help="extend: отчёт поиска (evals/results/*_search_*.json)")
     ap.add_argument("--config", default="config/demo.yaml")
     ap.add_argument("--only", nargs="+", help="id смысловых кейсов; по умолчанию все")
     ap.add_argument("--file", type=Path, default=REVIEW, help="файл проверки")
+    ap.add_argument("--merge", action="store_true", help="apply: добавить к прежней разметке (дооценка)")
     args = ap.parse_args()
     cfg = load_config(args.config)
     if args.command == "review":
         review(cfg, get_settings(), args.only, args.file)
+    elif args.command == "extend":
+        extend(cfg, get_settings(), args.report, args.file)
     else:
-        apply(cfg, args.only, args.file)
+        apply(cfg, args.only, args.file, args.merge)
 
 
 if __name__ == "__main__":

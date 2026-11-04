@@ -31,6 +31,7 @@ from app.search.hybrid import where_from_filters
 CASES = Path("evals/cases.jsonl")
 POOL = 30
 FIELD = "relevant_source_ids"
+JUDGED = "judged_source_ids"  # все оценённые объекты (и подходящие, и нет): база для «неразмеченных в топ-10»
 
 
 def parse_selection(text: str, n: int) -> list[int]:
@@ -66,15 +67,24 @@ def interleave(*ranked: list[str], limit: int) -> list[str]:
     return out[:limit]
 
 
-def set_labels(lines: list[str], case_id: str, ids: list[str], relevance: str) -> list[str]:
-    """Переписывает только строку нужного кейса; остальные строки остаются байт в байт."""
+def set_labels(
+    lines: list[str], case_id: str, ids: list[str], relevance: str, judged: list[str], merge: bool = False
+) -> list[str]:
+    """Переписывает только строку нужного кейса; остальные строки остаются байт в байт.
+
+    merge=True — дооценка: подходящие и оценённые добавляются к прежним, а не заменяют их.
+    """
+    if not set(ids) <= set(judged):
+        raise ValueError(f"{case_id}: подходящие должны входить в оценённые")
     out = []
     for line in lines:
         if line.strip() and json.loads(line)["id"] == case_id:
             case = json.loads(line)
-            if case.get(FIELD) != sorted(ids) or case.get("relevance") != relevance:
-                case[FIELD] = sorted(ids)
-                case["relevance"] = relevance
+            new_ids = set(ids) | set(case.get(FIELD, [])) if merge else set(ids)
+            new_judged = set(judged) | set(case.get(JUDGED, [])) if merge else set(judged)
+            new = {FIELD: sorted(new_ids), JUDGED: sorted(new_judged), "relevance": relevance}
+            if any(case.get(k) != v for k, v in new.items()):
+                case |= new
                 line = json.dumps(case, ensure_ascii=False) + "\n"
         out.append(line)
     return out
@@ -188,7 +198,7 @@ def main() -> None:
         lines = CASES.open(encoding="utf-8").readlines()
         auto = auto_labels(conn, cases)
         for cid, ids in auto.items():
-            lines = set_labels(lines, cid, ids, "auto")
+            lines = set_labels(lines, cid, ids, "auto", judged=ids)  # оценено всё под фильтрами
         CASES.write_text("".join(lines), encoding="utf-8")
         print("авто (все объекты под фильтрами): " + ", ".join(f"{k}={len(v)}" for k, v in auto.items()))
         print(f"к ручной разметке: {len(todo)} кейсов. Правила: docs/labeling.md\n")
@@ -204,7 +214,8 @@ def main() -> None:
             if result == "s":
                 continue
             lines = CASES.open(encoding="utf-8").readlines()
-            CASES.write_text("".join(set_labels(lines, case["id"], result, "manual")), encoding="utf-8")
+            judged = [r[0] for r in rows]
+            CASES.write_text("".join(set_labels(lines, case["id"], result, "manual", judged)), encoding="utf-8")
             print(f"  {case['id']}: записано {len(result)} шт.\n")
 
 
