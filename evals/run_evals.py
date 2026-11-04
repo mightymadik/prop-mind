@@ -26,7 +26,7 @@ from app.llm.client import PROMPTS_DIR
 from app.llm.parser import PROMPT_FILE, parse_query
 from app.schemas import SearchFilters
 from app.search.embeddings import embed, to_pgvector
-from app.search.hybrid import hybrid_search, query_text, vector_search, where_from_filters
+from app.search.hybrid import query_text, search, where_from_filters
 
 ROOT = Path(__file__).resolve().parent
 K = 10
@@ -153,10 +153,80 @@ def load_cases(split: str) -> list[dict]:
     return cases
 
 
-def run_search_mode(conn, mode: str, f: SearchFilters, vec: str, text: str) -> list[str]:
-    if mode == "vector":
-        return vector_search(conn, f, vec)
-    return hybrid_search(conn, f, vec, text)
+def embed_queries(texts: list[str], cfg, settings) -> list[str]:
+    # одним батчем: на бесплатном тарифе Voyage 3 запроса в минуту
+    bs = cfg.embeddings.batch_size
+    return [
+        to_pgvector(v)
+        for i in range(0, len(texts), bs)
+        for v in embed(texts[i : i + bs], cfg.embeddings, settings.voyage_api_key, input_type="query")
+    ]
+
+
+def relaxed_filters(f: SearchFilters, relaxed: list[str]) -> SearchFilters:
+    return f.model_copy(update={k: [] if k == "features" else None for k in relaxed})
+
+
+def run_relax(args, cfg, settings) -> None:
+    """Набор relax: строгие фильтры дают 0. Проверяем, что сняты ровно ожидаемые мягкие фильтры
+    и что весь топ-10 проходит оставшиеся фильтры."""
+    cases = load_cases("relax")
+    filters = {c["id"]: SearchFilters.model_validate(c["expected_filters"]) for c in cases}
+    texts = [query_text(filters[c["id"]], c["query"]) for c in cases]
+    vecs = embed_queries(texts, cfg, settings)
+    by_mode: dict[str, list[dict]] = {m: [] for m in args.modes}
+    with connect() as conn:
+        for c, vec, text in zip(cases, vecs, texts, strict=True):
+            f = filters[c["id"]]
+            for mode in args.modes:
+                ranked, relaxed = search(conn, f, vec, text, mode)
+                top = ranked[:K]
+                where, params = where_from_filters(relaxed_filters(f, relaxed))
+                ok_rows = conn.execute(
+                    f"SELECT count(*) FROM listings WHERE source_id = ANY(%(top)s) AND {where}", {**params, "top": top}
+                ).fetchone()[0]
+                by_mode[mode].append(
+                    {
+                        "id": c["id"],
+                        "query": c["query"],
+                        "expected_relaxed": c["expected_relaxed"],
+                        "relaxed": relaxed,
+                        "relaxed_ok": relaxed == c["expected_relaxed"],
+                        "n_results": len(ranked),
+                        "top_respects_remaining": bool(top) and ok_rows == len(top),
+                        "top10": top,
+                    }
+                )
+    now = datetime.now(UTC)
+    summary = {
+        m: {
+            "cases": len(rs),
+            "relaxed_ok": sum(r["relaxed_ok"] for r in rs),
+            "top_respects_remaining": sum(r["top_respects_remaining"] for r in rs),
+        }
+        for m, rs in by_mode.items()
+    }
+    report = {
+        "layer": "relax",
+        "modes": args.modes,
+        "date": now.isoformat(timespec="seconds"),
+        "summary": summary,
+        "results": by_mode,
+    }
+    out = ROOT / "results" / f"{now:%Y%m%dT%H%M%SZ}_relax_{'+'.join(args.modes)}.json"
+    out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    for m, rs in by_mode.items():
+        s = summary[m]
+        print(
+            f"relax/{m}: снято верно {s['relaxed_ok']}/{s['cases']}, "
+            f"топ-10 проходит оставшиеся фильтры {s['top_respects_remaining']}/{s['cases']}"
+        )
+        for r in rs:
+            flag = "ok " if r["relaxed_ok"] and r["top_respects_remaining"] else "FAIL"
+            print(
+                f"  {flag} {r['id']} снято {r['relaxed']} (ждали {r['expected_relaxed']}), результатов {r['n_results']}"
+            )
+    print(f"report: {out.relative_to(ROOT.parent)}")
 
 
 def unjudged(top: list[str], case: dict) -> list[str]:
@@ -170,13 +240,7 @@ def run_search(args, cfg, settings) -> None:
     cases = [c for c in load_cases(args.split) if "relevant_source_ids" in c]
     filters = {c["id"]: SearchFilters.model_validate(c["expected_filters"]) for c in cases}
     texts = [query_text(filters[c["id"]], c["query"]) for c in cases]
-    # эмбеддинги запросов одним батчем: на бесплатном тарифе Voyage 3 запроса в минуту
-    bs = cfg.embeddings.batch_size
-    vecs = [
-        to_pgvector(v)
-        for i in range(0, len(texts), bs)
-        for v in embed(texts[i : i + bs], cfg.embeddings, settings.voyage_api_key, input_type="query")
-    ]
+    vecs = embed_queries(texts, cfg, settings)
 
     by_mode: dict[str, list[dict]] = {m: [] for m in args.modes}
     with connect() as conn:
@@ -187,7 +251,7 @@ def run_search(args, cfg, settings) -> None:
             relevant = c["relevant_source_ids"]
             for mode in args.modes:
                 t = time.perf_counter()
-                ranked = run_search_mode(conn, mode, f, vec, text)
+                ranked, relaxed = search(conn, f, vec, text, mode)
                 latency = int((time.perf_counter() - t) * 1000)
                 by_mode[mode].append(
                     {
@@ -200,6 +264,7 @@ def run_search(args, cfg, settings) -> None:
                         "n_relevant": len(relevant),
                         "latency_ms": latency,
                         **(search_metrics(ranked, relevant) if relevant else {"hits": 0, "recall": None, "rr": None}),
+                        "relaxed": relaxed,
                         "unjudged_top10": unjudged(ranked[:K], c),
                         "top10": ranked[:K],
                     }
@@ -258,7 +323,7 @@ def run_search(args, cfg, settings) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="config/demo.yaml")
-    ap.add_argument("--layer", default="parse", choices=["parse", "search"])
+    ap.add_argument("--layer", default="parse", choices=["parse", "search", "relax"])
     ap.add_argument(
         "--modes", nargs="+", default=["vector", "hybrid"], choices=["vector", "hybrid"], help="search: методы"
     )
@@ -272,6 +337,8 @@ def main() -> None:
     settings = get_settings()
     if args.layer == "search":
         run_search(args, cfg, settings)
+    elif args.layer == "relax":
+        run_relax(args, cfg, settings)
     else:
         run_parse(args, cfg, settings)
 
