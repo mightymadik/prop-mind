@@ -80,12 +80,36 @@ def test_review_prints_no_queries_or_decisions(monkeypatch, tmp_path, capsys):
         encoding="utf-8",
     )
     monkeypatch.setattr(llm_label, "CASES", cases)
-    monkeypatch.setattr(llm_label, "REVIEW", tmp_path / "review.md")
     monkeypatch.setattr(llm_label, "connect", lambda: __import__("contextlib").nullcontext(None))
     monkeypatch.setattr(llm_label, "candidates", lambda conn, c, cfg, key: (2, ROWS))
     monkeypatch.setattr(llm_label, "decide", lambda c, rows, cfg, s, rules: decisions(True, False))
-    llm_label.review(CFG, Settings())
+    llm_label.review(CFG, Settings(), path=tmp_path / "review.md")
     printed = capsys.readouterr().out
     assert "СЕКРЕТНЫЙ" not in printed and "причина" not in printed and ref("syn-00804") not in printed
     assert "h06: размечено кандидатов 2" in printed
     assert "СЕКРЕТНЫЙ ЗАПРОС" in (tmp_path / "review.md").read_text(encoding="utf-8")
+
+
+def test_targets_only_semantic_cases():
+    cases = [
+        {"id": "d15", "semantic": "required", "expected_filters": {}},
+        {"id": "d01", "semantic": "empty", "expected_filters": {}},
+    ]
+    assert [c["id"] for c in llm_label.targets(cases)] == ["d15"]
+    assert [c["id"] for c in llm_label.targets(cases, ["d15"])] == ["d15"]
+    with pytest.raises(SystemExit, match="d01"):
+        llm_label.targets(cases, ["d01"])
+
+
+def test_review_never_overwrites_existing_file(monkeypatch, tmp_path):
+    existing = tmp_path / "review.md"
+    existing.write_text("проверено человеком", encoding="utf-8")
+    cases = tmp_path / "cases.jsonl"
+    cases.write_text('{"id": "d15", "query": "q", "semantic": "required", "expected_filters": {}}\n', encoding="utf-8")
+    monkeypatch.setattr(llm_label, "CASES", cases)
+    monkeypatch.setattr(llm_label, "connect", lambda: __import__("contextlib").nullcontext(None))
+    monkeypatch.setattr(llm_label, "candidates", lambda conn, c, cfg, key: (2, ROWS))
+    monkeypatch.setattr(llm_label, "decide", lambda c, rows, cfg, s, rules: decisions(True, False))
+    with pytest.raises(SystemExit, match="не перезаписываю"):
+        llm_label.review(CFG, Settings(), path=existing)
+    assert existing.read_text(encoding="utf-8") == "проверено человеком"

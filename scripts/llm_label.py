@@ -8,6 +8,9 @@
 
     python scripts/llm_label.py review --config config/demo.yaml
     python scripts/llm_label.py apply --config config/demo.yaml
+
+Новая партия кейсов — отдельным файлом, не трогая уже проверенные:
+    python scripts/llm_label.py review --only d21 d22 --file evals/llm_labels_review_v2.md
 """
 
 import argparse
@@ -135,27 +138,36 @@ def resolve_refs(refs: set[str], source_ids: list[str]) -> dict[str, str]:
     return out
 
 
-def targets(cases: list[dict]) -> list[dict]:
-    return [c for c in cases if labeling_mode(c) == "manual"]
+def targets(cases: list[dict], only: list[str] | None = None) -> list[dict]:
+    """Смысловые кейсы; с only — только перечисленные (и все они должны быть смысловыми)."""
+    manual = [c for c in cases if labeling_mode(c) == "manual"]
+    if not only:
+        return manual
+    unknown = set(only) - {c["id"] for c in manual}
+    if unknown:
+        raise SystemExit(f"не смысловые или неизвестные кейсы: {sorted(unknown)}")
+    return [c for c in manual if c["id"] in only]
 
 
-def review(cfg, settings) -> None:
+def review(cfg, settings, only: list[str] | None = None, path: Path = REVIEW) -> None:
     cases = [json.loads(ln) for ln in CASES.open(encoding="utf-8") if ln.strip()]
     rules = labeling_rules(RULES_DOC.read_text(encoding="utf-8"))
     sections = []
     with connect() as conn:
-        for c in targets(cases):
+        for c in targets(cases, only):
             _, rows = candidates(conn, c, cfg, settings.voyage_api_key)
             sections.append((c, rows, decide(c, rows, cfg, settings, rules)))
             print(f"{c['id']}: размечено кандидатов {len(rows)}")  # без запроса и решений
-    REVIEW.write_text(render_review(sections, cfg.models["labeler"]), encoding="utf-8")
-    print(f"готово: {REVIEW} — проверь, поправь и поставь «{REVIEWED_MARK}»")
+    if path.exists():
+        raise SystemExit(f"{path} уже есть — не перезаписываю проверенный файл; укажи другой --file")
+    path.write_text(render_review(sections, cfg.models["labeler"]), encoding="utf-8")
+    print(f"готово: {path} — проверь, поправь и поставь «{REVIEWED_MARK}»")
 
 
-def apply(cfg) -> None:
-    decisions = parse_review(REVIEW.read_text(encoding="utf-8"))
+def apply(cfg, only: list[str] | None = None, path: Path = REVIEW) -> None:
+    decisions = parse_review(path.read_text(encoding="utf-8"))
     cases = [json.loads(ln) for ln in CASES.open(encoding="utf-8") if ln.strip()]
-    expected = {c["id"] for c in targets(cases)}
+    expected = {c["id"] for c in targets(cases, only)}
     if set(decisions) != expected:
         raise SystemExit(f"в файле кейсы {sorted(decisions)}, ожидались {sorted(expected)}")
     with connect() as conn:
@@ -172,12 +184,14 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("command", choices=["review", "apply"])
     ap.add_argument("--config", default="config/demo.yaml")
+    ap.add_argument("--only", nargs="+", help="id смысловых кейсов; по умолчанию все")
+    ap.add_argument("--file", type=Path, default=REVIEW, help="файл проверки")
     args = ap.parse_args()
     cfg = load_config(args.config)
     if args.command == "review":
-        review(cfg, get_settings())
+        review(cfg, get_settings(), args.only, args.file)
     else:
-        apply(cfg)
+        apply(cfg, args.only, args.file)
 
 
 if __name__ == "__main__":
