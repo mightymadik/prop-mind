@@ -92,8 +92,8 @@ def set_labels(
 
 def labeling_mode(case: dict) -> str | None:
     """auto — эталон = все объекты под фильтрами; manual — размечает человек; None — не размечаем."""
-    if case["expected_filters"].get("needs_clarification"):
-        return None
+    if case.get("split") == "relax" or case["expected_filters"].get("needs_clarification"):
+        return None  # relax — проверка ослабления фильтров, эталона релевантности нет
     return {"empty": "auto", "required": "manual"}.get(case["semantic"])
 
 

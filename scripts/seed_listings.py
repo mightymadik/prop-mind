@@ -232,7 +232,7 @@ def main() -> None:
     targets = []
     with connect() as conn:
         for c in cases:
-            if c["expected_filters"].get("needs_clarification"):
+            if c.get("split") == "relax" or c["expected_filters"].get("needs_clarification"):  # relax пустые намеренно
                 continue
             where, params = where_from_filters(SearchFilters.model_validate(c["expected_filters"]))
             sql = f"SELECT count(*) FROM listings WHERE {where} AND source_id NOT LIKE 'seed-%%'"

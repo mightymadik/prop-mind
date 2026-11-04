@@ -67,6 +67,7 @@ def test_labeling_mode_by_semantic():
     assert labeling_mode(case("empty")) == "auto"
     assert labeling_mode(case("required")) == "manual"
     assert labeling_mode(case("any", clarify=True)) is None
+    assert labeling_mode({"id": "r01", "split": "relax", "expected_filters": {}}) is None
 
 
 def test_needs_labels_only_unlabeled_manual_or_relabel():
