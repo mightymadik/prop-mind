@@ -26,7 +26,7 @@ from app.llm.client import PROMPTS_DIR
 from app.llm.parser import PROMPT_FILE, parse_query
 from app.schemas import SearchFilters
 from app.search.embeddings import embed, to_pgvector
-from app.search.hybrid import query_text, vector_search, where_from_filters
+from app.search.hybrid import hybrid_search, query_text, vector_search, where_from_filters
 
 ROOT = Path(__file__).resolve().parent
 K = 10
@@ -153,57 +153,75 @@ def load_cases(split: str) -> list[dict]:
     return cases
 
 
+def run_search_mode(conn, mode: str, f: SearchFilters, vec: str, text: str) -> list[str]:
+    if mode == "vector":
+        return vector_search(conn, f, vec)
+    return hybrid_search(conn, f, vec, text)
+
+
+def unjudged(top: list[str], case: dict) -> list[str]:
+    """Объекты топа, которых нет в оценённых: их релевантность неизвестна, метрика по ним занижена."""
+    judged = set(case.get("judged_source_ids", []))
+    return [x for x in top if x not in judged]
+
+
 def run_search(args, cfg, settings) -> None:
+    """Все методы из --modes на одной разметке и одних эмбеддингах запросов — сравнимы только внутри прогона."""
     cases = [c for c in load_cases(args.split) if "relevant_source_ids" in c]
     filters = {c["id"]: SearchFilters.model_validate(c["expected_filters"]) for c in cases}
     texts = [query_text(filters[c["id"]], c["query"]) for c in cases]
     # эмбеддинги запросов одним батчем: на бесплатном тарифе Voyage 3 запроса в минуту
     bs = cfg.embeddings.batch_size
     vecs = [
-        v
+        to_pgvector(v)
         for i in range(0, len(texts), bs)
         for v in embed(texts[i : i + bs], cfg.embeddings, settings.voyage_api_key, input_type="query")
     ]
 
-    results = []
+    by_mode: dict[str, list[dict]] = {m: [] for m in args.modes}
     with connect() as conn:
-        for c, vec in zip(cases, vecs, strict=True):
+        for c, vec, text in zip(cases, vecs, texts, strict=True):
             f = filters[c["id"]]
             where, params = where_from_filters(f)
             n_candidates = conn.execute(f"SELECT count(*) FROM listings WHERE {where}", params).fetchone()[0]
-            t = time.perf_counter()
-            ranked = vector_search(conn, f, to_pgvector(vec))
-            latency = int((time.perf_counter() - t) * 1000)
             relevant = c["relevant_source_ids"]
-            results.append(
-                {
-                    "id": c["id"],
-                    "query": c["query"],
-                    "tags": c["tags"],
-                    "relevance": c.get("relevance"),
-                    "group": "ranking" if ranking_matters(c, n_candidates) else "other",
-                    "n_candidates": n_candidates,
-                    "n_relevant": len(relevant),
-                    "latency_ms": latency,
-                    **(search_metrics(ranked, relevant) if relevant else {"hits": 0, "recall": None, "rr": None}),
-                    "top10": ranked[:K],
-                }
-            )
+            for mode in args.modes:
+                t = time.perf_counter()
+                ranked = run_search_mode(conn, mode, f, vec, text)
+                latency = int((time.perf_counter() - t) * 1000)
+                by_mode[mode].append(
+                    {
+                        "id": c["id"],
+                        "query": c["query"],
+                        "tags": c["tags"],
+                        "relevance": c.get("relevance"),
+                        "group": "ranking" if ranking_matters(c, n_candidates) else "other",
+                        "n_candidates": n_candidates,
+                        "n_relevant": len(relevant),
+                        "latency_ms": latency,
+                        **(search_metrics(ranked, relevant) if relevant else {"hits": 0, "recall": None, "rr": None}),
+                        "unjudged_top10": unjudged(ranked[:K], c),
+                        "top10": ranked[:K],
+                    }
+                )
 
-    summary = summarize_search(results)
+    summaries = {}
+    for mode, results in by_mode.items():
+        summaries[mode] = summarize_search(results)
+        summaries[mode]["unjudged_at_10"] = {r["id"]: len(r["unjudged_top10"]) for r in results if r["unjudged_top10"]}
     now = datetime.now(UTC)
     report = {
         "layer": "search",
-        "mode": args.mode,
+        "modes": args.modes,
         "filters": "gold",
         "split": args.split,
         "date": now.isoformat(timespec="seconds"),
         "config": args.config,
         "embeddings": cfg.embeddings.model_dump(),
-        "summary": summary,
-        "results": results,
+        "summary": summaries,
+        "results": by_mode,
     }
-    out = ROOT / "results" / f"{now:%Y%m%dT%H%M%SZ}_search_{args.mode}_{args.split}.json"
+    out = ROOT / "results" / f"{now:%Y%m%dT%H%M%SZ}_search_{'+'.join(args.modes)}_{args.split}.json"
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def line(name: str, a: dict) -> str:
@@ -211,23 +229,29 @@ def run_search(args, cfg, settings) -> None:
             return f"  {name:22} n=0"
         return f"  {name:22} n={a['n']:<3} Recall@10 {a['recall_at_10']:.0%}  MRR {a['mrr']:.2f}"
 
-    print(
-        f"search/{args.mode}/{args.split} (gold filters): {summary['cases']} cases, "
-        f"SQL p50 {summary['sql_latency_ms']['p50']} ms, p95 {summary['sql_latency_ms']['p95']} ms"
-    )
-    print(line("all", summary))
-    for g, a in summary["by_group"].items():
-        print(line(f"group {g}", a))
-    for t, a in summary["by_tag"].items():
-        print(line(f"tag {t}", a))
-    for r in results:
-        if r["recall"] is not None and r["recall"] < 1:
-            print(
-                f"  MISS {r['id']} [{r['group']}] recall {r['recall']:.0%} rr {r['rr']:.2f} "
-                f"({r['hits']}/{min(r['n_relevant'], K)}, candidates {r['n_candidates']})"
-            )
-    if summary["empty_relevant"]:
-        print(f"  без подходящих (не в среднем): {', '.join(summary['empty_relevant'])}")
+    for mode, results in by_mode.items():
+        summary = summaries[mode]
+        print(
+            f"search/{mode}/{args.split} (gold filters): {summary['cases']} cases, "
+            f"SQL p50 {summary['sql_latency_ms']['p50']} ms, p95 {summary['sql_latency_ms']['p95']} ms"
+        )
+        print(line("all", summary))
+        for g, a in summary["by_group"].items():
+            print(line(f"group {g}", a))
+        if args.verbose:
+            for t, a in summary["by_tag"].items():
+                print(line(f"tag {t}", a))
+        for r in results:
+            if r["recall"] is not None and r["recall"] < 1:
+                print(
+                    f"  MISS {r['id']} [{r['group']}] recall {r['recall']:.0%} rr {r['rr']:.2f} "
+                    f"({r['hits']}/{min(r['n_relevant'], K)}, candidates {r['n_candidates']})"
+                )
+        if summary["unjudged_at_10"]:
+            total = sum(summary["unjudged_at_10"].values())
+            print(f"  НЕРАЗМЕЧЕННЫХ в топ-10: {total} — {summary['unjudged_at_10']} (дооценка: llm_label.py extend)")
+        if summary["empty_relevant"]:
+            print(f"  без подходящих (не в среднем): {', '.join(summary['empty_relevant'])}")
     print(f"report: {out.relative_to(ROOT.parent)}")
 
 
@@ -235,7 +259,10 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="config/demo.yaml")
     ap.add_argument("--layer", default="parse", choices=["parse", "search"])
-    ap.add_argument("--mode", default="vector", choices=["vector"], help="search: метод поиска")
+    ap.add_argument(
+        "--modes", nargs="+", default=["vector", "hybrid"], choices=["vector", "hybrid"], help="search: методы"
+    )
+    ap.add_argument("--verbose", action="store_true", help="search: разбивка по тегам")
     ap.add_argument("--split", default="dev", choices=["dev", "holdout"])
     ap.add_argument("--repeats", type=int, default=1, help="parse: прогонов на кейс, оценка разброса")
     ap.add_argument("--workers", type=int, default=4)

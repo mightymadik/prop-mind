@@ -125,3 +125,11 @@ def test_summarize_search_groups_and_excludes_empty():
     assert s["by_group"]["ranking"] == {"n": 1, "recall_at_10": 0.5, "mrr": 1.0}
     assert s["by_group"]["other"] == {"n": 2, "recall_at_10": 0.5, "mrr": 0.5}
     assert s["empty_relevant"] == ["e"] and "semantic" in s["by_tag"]
+
+
+def test_unjudged_lists_top_objects_without_judgement():
+    from evals.run_evals import unjudged
+
+    case = {"judged_source_ids": ["a", "b"]}
+    assert unjudged(["a", "x", "b", "y"], case) == ["x", "y"]
+    assert unjudged(["a"], {}) == ["a"]  # нет разметки — всё неразмечено
