@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 
 from app.schemas import SearchFilters
 
@@ -80,3 +80,30 @@ def hybrid_search(
         {**params, "qvec": qvec, "qtext": qtext, "limit": limit, "pool": pool, "rrf_k": rrf_k},
     ).fetchall()
     return [r[0] for r in rows]
+
+
+SearchMode = Literal["vector", "hybrid"]
+RELAX_ORDER = ("features", "conditions", "districts")  # мягкие фильтры; город, сделка, комнаты, цена, площадь — жёсткие
+
+
+def search(
+    conn, filters: SearchFilters, qvec: str, qtext: str, mode: SearchMode = "hybrid"
+) -> tuple[list[str], list[str]]:
+    """Поиск с ослаблением: только если строгие фильтры дали 0, по очереди и накопительно снимаются
+    features → conditions → districts; остановка на первом непустом шаге.
+
+    Возвращает (source_id по убыванию релевантности, какие фильтры сняты). Ответ обязан сказать
+    пользователю, что ослаблено. Пустой список даже без мягких фильтров — честный ноль.
+    """
+    relaxed: list[str] = []
+    f = filters
+    for step in (None, *RELAX_ORDER):
+        if step is not None:
+            if not getattr(f, step):
+                continue  # фильтр не задан — ослаблять нечего
+            f = f.model_copy(update={step: [] if step == "features" else None})
+            relaxed.append(step)
+        ranked = vector_search(conn, f, qvec) if mode == "vector" else hybrid_search(conn, f, qvec, qtext)
+        if ranked:
+            return ranked, relaxed
+    return [], relaxed
