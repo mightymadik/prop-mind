@@ -18,3 +18,10 @@ def test_where_from_filters_parametrized():
         "features": ["near_metro"],
     }
     assert "Алматы" not in sql  # значения только в параметрах
+
+
+def test_query_text_prefers_semantic_part():
+    from app.search.hybrid import query_text
+
+    assert query_text(SearchFilters(semantic_query=" вид на горы "), "тихая с видом на горы") == "вид на горы"
+    assert query_text(SearchFilters(), "двушка в Астане") == "двушка в Астане"

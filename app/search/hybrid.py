@@ -29,3 +29,18 @@ def where_from_filters(f: SearchFilters) -> tuple[str, dict[str, Any]]:
     if f.features:
         add("features @> %(features)s::text[]", "features", f.features)
     return " AND ".join(clauses), params
+
+
+def query_text(filters: SearchFilters, query: str) -> str:
+    """Текст для эмбеддинга и полнотекстового поиска: смысловая часть, а если её нет — весь запрос."""
+    return filters.semantic_query.strip() or query
+
+
+def vector_search(conn, filters: SearchFilters, qvec: str, limit: int = 50) -> list[str]:
+    """Жёсткие фильтры + сортировка по косинусному расстоянию → source_id по убыванию близости."""
+    where, params = where_from_filters(filters)
+    rows = conn.execute(
+        f"SELECT source_id FROM listings WHERE {where} ORDER BY embedding <=> %(qvec)s::vector LIMIT %(limit)s",
+        {**params, "qvec": qvec, "limit": limit},
+    ).fetchall()
+    return [r[0] for r in rows]
