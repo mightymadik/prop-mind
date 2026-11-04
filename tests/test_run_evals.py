@@ -78,3 +78,50 @@ def test_run_case_reports_got_without_defaults(monkeypatch):
     )
     r = run_evals.run_case({"query": "q", "expected_filters": {"city": "Алматы"}, "semantic": "empty"}, cfg, Settings())
     assert r["ok"] and r["got"] == {"city": "Алматы"}
+
+
+def test_search_metrics_recall_capped_at_k_and_rr():
+    from evals.run_evals import search_metrics
+
+    ranked = [f"x{i}" for i in range(20)]
+    assert search_metrics(ranked, ["x2", "x15"]) == {"hits": 1, "recall": 0.5, "rr": 0.333}
+    many = [f"x{i}" for i in range(0, 40, 2)]  # 20 подходящих: потолок — 10 из топ-10
+    assert search_metrics(ranked, many)["recall"] == 0.5
+    assert search_metrics(ranked, ranked) == {"hits": 10, "recall": 1.0, "rr": 1.0}
+    assert search_metrics(ranked, ["nope"]) == {"hits": 0, "recall": 0.0, "rr": 0.0}
+
+
+def test_ranking_matters_needs_semantic_and_more_than_k_candidates():
+    from evals.run_evals import ranking_matters
+
+    assert ranking_matters({"semantic": "required"}, 11)
+    assert not ranking_matters({"semantic": "required"}, 10)
+    assert not ranking_matters({"semantic": "empty"}, 500)
+
+
+def test_summarize_search_groups_and_excludes_empty():
+    from evals.run_evals import summarize_search
+
+    def r(id_, group, recall, rr, n_rel=3, tags=("simple",)):
+        return {
+            "id": id_,
+            "group": group,
+            "recall": recall,
+            "rr": rr,
+            "n_relevant": n_rel,
+            "tags": list(tags),
+            "latency_ms": 5,
+        }
+
+    s = summarize_search(
+        [
+            r("a", "ranking", 0.5, 1.0, tags=("semantic",)),
+            r("b", "other", 1.0, 1.0),
+            r("c", "other", 0.0, 0.0),
+            r("e", "other", None, None, n_rel=0),
+        ]
+    )
+    assert (s["n"], s["recall_at_10"], s["mrr"]) == (3, 0.5, 0.667)
+    assert s["by_group"]["ranking"] == {"n": 1, "recall_at_10": 0.5, "mrr": 1.0}
+    assert s["by_group"]["other"] == {"n": 2, "recall_at_10": 0.5, "mrr": 0.5}
+    assert s["empty_relevant"] == ["e"] and "semantic" in s["by_tag"]

@@ -1,9 +1,13 @@
-"""Evals слоя разбора: SearchFilters против expected_filters из evals/cases.jsonl.
+"""Evals по evals/cases.jsonl, два слоя по отдельности.
 
-    python evals/run_evals.py --config config/demo.yaml            # dev
-    python evals/run_evals.py --config config/demo.yaml --split holdout   # один раз, в конце
+parse  — SearchFilters от parse_query против expected_filters.
+search — поиск на эталонных expected_filters против relevant_source_ids: Recall@10, MRR.
 
-Отчёт: evals/results/<UTC-время>_parse_<split>.json
+    python evals/run_evals.py --config config/demo.yaml                       # parse, dev
+    python evals/run_evals.py --config config/demo.yaml --layer search        # search, dev
+    python evals/run_evals.py --config config/demo.yaml --split holdout       # один раз, в конце
+
+Отчёт: evals/results/<UTC-время>_<layer>_..._<split>.json
 """
 
 import argparse
@@ -17,11 +21,15 @@ from pathlib import Path
 from typing import Any
 
 from app.config import get_settings, load_config
+from app.db import connect
 from app.llm.client import PROMPTS_DIR
 from app.llm.parser import PROMPT_FILE, parse_query
 from app.schemas import SearchFilters
+from app.search.embeddings import embed, to_pgvector
+from app.search.hybrid import query_text, vector_search, where_from_filters
 
 ROOT = Path(__file__).resolve().parent
+K = 10
 EXACT_FIELDS = [f for f in SearchFilters.model_fields if f not in ("semantic_query", "needs_clarification")]
 DEFAULTS = SearchFilters().model_dump()
 
@@ -100,20 +108,149 @@ def run_case(case: dict, cfg, settings) -> dict:
     }
 
 
+def search_metrics(ranked: list[str], relevant: list[str], k: int = K) -> dict:
+    """Recall@k = попаданий / min(|relevant|, k) — потолок 100% и при relevant > k; RR — по топ-k."""
+    top = ranked[:k]
+    hits = len(set(top) & set(relevant))
+    rr = next((1 / (i + 1) for i, x in enumerate(top) if x in relevant), 0.0)
+    return {"hits": hits, "recall": round(hits / min(len(relevant), k), 3), "rr": round(rr, 3)}
+
+
+def ranking_matters(case: dict, n_candidates: int) -> bool:
+    """Есть смысловые требования и под фильтры больше k объектов — порядок решает, что попадёт в топ."""
+    return case["semantic"] == "required" and n_candidates > K
+
+
+def summarize_search(results: list[dict]) -> dict:
+    scored = [r for r in results if r["n_relevant"] > 0]
+
+    def agg(rs: list[dict]) -> dict:
+        if not rs:
+            return {"n": 0, "recall_at_10": None, "mrr": None}
+        return {
+            "n": len(rs),
+            "recall_at_10": round(statistics.fmean(r["recall"] for r in rs), 3),
+            "mrr": round(statistics.fmean(r["rr"] for r in rs), 3),
+        }
+
+    tags = sorted({t for r in scored for t in r["tags"]})
+    lat = sorted(r["latency_ms"] for r in results)
+    return {
+        "cases": len(results),
+        **agg(scored),
+        "by_group": {g: agg([r for r in scored if r["group"] == g]) for g in ("ranking", "other")},
+        "by_tag": {t: agg([r for r in scored if t in r["tags"]]) for t in tags},
+        "empty_relevant": [r["id"] for r in results if r["n_relevant"] == 0],
+        "sql_latency_ms": {"p50": int(statistics.median(lat)), "p95": lat[min(len(lat) - 1, int(len(lat) * 0.95))]},
+    }
+
+
+def load_cases(split: str) -> list[dict]:
+    cases = [json.loads(line) for line in (ROOT / "cases.jsonl").open(encoding="utf-8") if line.strip()]
+    cases = [c for c in cases if c["split"] == split]
+    if not cases:
+        raise SystemExit(f"no cases with split={split}")
+    return cases
+
+
+def run_search(args, cfg, settings) -> None:
+    cases = [c for c in load_cases(args.split) if "relevant_source_ids" in c]
+    filters = {c["id"]: SearchFilters.model_validate(c["expected_filters"]) for c in cases}
+    texts = [query_text(filters[c["id"]], c["query"]) for c in cases]
+    # эмбеддинги запросов одним батчем: на бесплатном тарифе Voyage 3 запроса в минуту
+    bs = cfg.embeddings.batch_size
+    vecs = [
+        v
+        for i in range(0, len(texts), bs)
+        for v in embed(texts[i : i + bs], cfg.embeddings, settings.voyage_api_key, input_type="query")
+    ]
+
+    results = []
+    with connect() as conn:
+        for c, vec in zip(cases, vecs, strict=True):
+            f = filters[c["id"]]
+            where, params = where_from_filters(f)
+            n_candidates = conn.execute(f"SELECT count(*) FROM listings WHERE {where}", params).fetchone()[0]
+            t = time.perf_counter()
+            ranked = vector_search(conn, f, to_pgvector(vec))
+            latency = int((time.perf_counter() - t) * 1000)
+            relevant = c["relevant_source_ids"]
+            results.append(
+                {
+                    "id": c["id"],
+                    "query": c["query"],
+                    "tags": c["tags"],
+                    "relevance": c.get("relevance"),
+                    "group": "ranking" if ranking_matters(c, n_candidates) else "other",
+                    "n_candidates": n_candidates,
+                    "n_relevant": len(relevant),
+                    "latency_ms": latency,
+                    **(search_metrics(ranked, relevant) if relevant else {"hits": 0, "recall": None, "rr": None}),
+                    "top10": ranked[:K],
+                }
+            )
+
+    summary = summarize_search(results)
+    now = datetime.now(UTC)
+    report = {
+        "layer": "search",
+        "mode": args.mode,
+        "filters": "gold",
+        "split": args.split,
+        "date": now.isoformat(timespec="seconds"),
+        "config": args.config,
+        "embeddings": cfg.embeddings.model_dump(),
+        "summary": summary,
+        "results": results,
+    }
+    out = ROOT / "results" / f"{now:%Y%m%dT%H%M%SZ}_search_{args.mode}_{args.split}.json"
+    out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def line(name: str, a: dict) -> str:
+        if not a["n"]:
+            return f"  {name:22} n=0"
+        return f"  {name:22} n={a['n']:<3} Recall@10 {a['recall_at_10']:.0%}  MRR {a['mrr']:.2f}"
+
+    print(
+        f"search/{args.mode}/{args.split} (gold filters): {summary['cases']} cases, "
+        f"SQL p50 {summary['sql_latency_ms']['p50']} ms, p95 {summary['sql_latency_ms']['p95']} ms"
+    )
+    print(line("all", summary))
+    for g, a in summary["by_group"].items():
+        print(line(f"group {g}", a))
+    for t, a in summary["by_tag"].items():
+        print(line(f"tag {t}", a))
+    for r in results:
+        if r["recall"] is not None and r["recall"] < 1:
+            print(
+                f"  MISS {r['id']} [{r['group']}] recall {r['recall']:.0%} rr {r['rr']:.2f} "
+                f"({r['hits']}/{min(r['n_relevant'], K)}, candidates {r['n_candidates']})"
+            )
+    if summary["empty_relevant"]:
+        print(f"  без подходящих (не в среднем): {', '.join(summary['empty_relevant'])}")
+    print(f"report: {out.relative_to(ROOT.parent)}")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="config/demo.yaml")
+    ap.add_argument("--layer", default="parse", choices=["parse", "search"])
+    ap.add_argument("--mode", default="vector", choices=["vector"], help="search: метод поиска")
     ap.add_argument("--split", default="dev", choices=["dev", "holdout"])
-    ap.add_argument("--repeats", type=int, default=1, help="прогонов на кейс: оценка разброса")
+    ap.add_argument("--repeats", type=int, default=1, help="parse: прогонов на кейс, оценка разброса")
     ap.add_argument("--workers", type=int, default=4)
     args = ap.parse_args()
 
     cfg = load_config(args.config)
     settings = get_settings()
-    cases = [json.loads(line) for line in (ROOT / "cases.jsonl").open(encoding="utf-8") if line.strip()]
-    cases = [c for c in cases if c["split"] == args.split]
-    if not cases:
-        raise SystemExit(f"no cases with split={args.split}")
+    if args.layer == "search":
+        run_search(args, cfg, settings)
+    else:
+        run_parse(args, cfg, settings)
+
+
+def run_parse(args, cfg, settings) -> None:
+    cases = load_cases(args.split)
 
     jobs = [c for c in cases for _ in range(args.repeats)]
     with ThreadPoolExecutor(args.workers) as pool:
