@@ -44,3 +44,39 @@ def vector_search(conn, filters: SearchFilters, qvec: str, limit: int = 50) -> l
         {**params, "qvec": qvec, "limit": limit},
     ).fetchall()
     return [r[0] for r in rows]
+
+
+# OR вместо AND (websearch_to_tsquery из дизайна): на целом запросе AND почти никогда не совпадает,
+# и гибрид вырождался бы в векторы. ts_rank_cd сам поднимает тексты с большим числом совпадений.
+HYBRID_SQL = """
+WITH base AS (
+  SELECT source_id, tsv, embedding FROM listings WHERE {where}
+),
+vec AS (
+  SELECT source_id, row_number() OVER (ORDER BY embedding <=> %(qvec)s::vector) AS r
+  FROM base ORDER BY embedding <=> %(qvec)s::vector LIMIT %(pool)s
+),
+fts AS (
+  SELECT source_id, row_number() OVER (ORDER BY ts_rank_cd(tsv, q) DESC, source_id) AS r
+  FROM base, CAST(replace(plainto_tsquery('russian', %(qtext)s)::text, '&', '|') AS tsquery) AS q
+  WHERE tsv @@ q
+  ORDER BY ts_rank_cd(tsv, q) DESC, source_id LIMIT %(pool)s
+)
+SELECT source_id, SUM(1.0 / (%(rrf_k)s + r)) AS score
+FROM (SELECT * FROM vec UNION ALL SELECT * FROM fts) AS u
+GROUP BY source_id
+ORDER BY score DESC, source_id
+LIMIT %(limit)s
+"""
+
+
+def hybrid_search(
+    conn, filters: SearchFilters, qvec: str, qtext: str, limit: int = 50, pool: int = 50, rrf_k: int = 60
+) -> list[str]:
+    """Жёсткие фильтры, затем векторы и полнотекстовый поиск (по 50), слияние через RRF."""
+    where, params = where_from_filters(filters)
+    rows = conn.execute(
+        HYBRID_SQL.format(where=where),
+        {**params, "qvec": qvec, "qtext": qtext, "limit": limit, "pool": pool, "rrf_k": rrf_k},
+    ).fetchall()
+    return [r[0] for r in rows]
