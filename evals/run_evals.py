@@ -153,14 +153,39 @@ def load_cases(split: str) -> list[dict]:
     return cases
 
 
-def embed_queries(texts: list[str], cfg, settings) -> list[str]:
-    # одним батчем: на бесплатном тарифе Voyage 3 запроса в минуту
-    bs = cfg.embeddings.batch_size
-    return [
-        to_pgvector(v)
-        for i in range(0, len(texts), bs)
-        for v in embed(texts[i : i + bs], cfg.embeddings, settings.voyage_api_key, input_type="query")
-    ]
+QUERY_CACHE = ROOT / "query_embeddings.jsonl"
+
+
+def embed_queries(texts: list[str], cfg, settings, cache_path: Path | None = None) -> list[str]:
+    """Эмбеддинги запросов с кэшем (модель + тип ввода + размерность + текст).
+
+    Voyage для одного текста в разных запросах даёт слегка разные векторы — кэш делает прогоны
+    воспроизводимыми. Новые тексты считаются одним батчем (бесплатный тариф: 3 запроса в минуту)
+    и дописываются в кэш.
+    """
+    cache_path = cache_path or QUERY_CACHE
+    e = cfg.embeddings
+
+    def key(text: str) -> tuple:
+        return (e.model, "query", e.dim, text)
+
+    cache: dict[tuple, list[float]] = {}
+    if cache_path.exists():
+        for line in cache_path.open(encoding="utf-8"):
+            if line.strip():
+                r = json.loads(line)
+                cache[(r["model"], r["input_type"], r["dim"], r["text"])] = r["embedding"]
+    missing = list(dict.fromkeys(t for t in texts if key(t) not in cache))
+    bs = e.batch_size
+    for i in range(0, len(missing), bs):
+        chunk = missing[i : i + bs]
+        vecs = embed(chunk, e, settings.voyage_api_key, input_type="query")
+        with cache_path.open("a", encoding="utf-8") as f:
+            for t, v in zip(chunk, vecs, strict=True):
+                cache[key(t)] = v
+                row = {"model": e.model, "input_type": "query", "dim": e.dim, "text": t, "embedding": v}
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    return [to_pgvector(cache[key(t)]) for t in texts]
 
 
 def relaxed_filters(f: SearchFilters, relaxed: list[str]) -> SearchFilters:

@@ -133,3 +133,30 @@ def test_unjudged_lists_top_objects_without_judgement():
     case = {"judged_source_ids": ["a", "b"]}
     assert unjudged(["a", "x", "b", "y"], case) == ["x", "y"]
     assert unjudged(["a"], {}) == ["a"]  # нет разметки — всё неразмечено
+
+
+def test_embed_queries_uses_cache_keyed_by_model_and_text(monkeypatch, tmp_path):
+    from app.config import EmbeddingsConfig, Settings
+    from evals import run_evals
+
+    calls = []
+
+    def fake_embed(texts, cfg, api_key, input_type):
+        calls.append(list(texts))
+        return [[float(len(t)), float(len(calls))] for t in texts]
+
+    monkeypatch.setattr(run_evals, "embed", fake_embed)
+
+    class Cfg:
+        embeddings = EmbeddingsConfig(provider="voyage", model="m1", dim=2, batch_size=2)
+
+    cache = tmp_path / "cache.jsonl"
+    first = run_evals.embed_queries(["a", "bb", "a", "ccc"], Cfg, Settings(), cache)
+    assert calls == [["a", "bb"], ["ccc"]]  # без повторов, батчами
+    again = run_evals.embed_queries(["ccc", "a"], Cfg, Settings(), cache)
+    assert calls == [["a", "bb"], ["ccc"]]  # всё из кэша, API не вызывался
+    assert again == [first[3], first[0]]  # те же векторы, что в первый раз
+
+    Cfg.embeddings = EmbeddingsConfig(provider="voyage", model="m2", dim=2, batch_size=2)
+    run_evals.embed_queries(["a"], Cfg, Settings(), cache)
+    assert calls[-1] == ["a"]  # другая модель — другой ключ
