@@ -27,6 +27,7 @@ v1 — фиксированный workflow. v2 (tool use) — только по�
 
 - Окружение: `uv sync` (Python 3.12, `.venv`); `cp .env.example .env` и вписать ключи
 - Запуск: `docker compose up` (порт БД на хосте — `DB_PORT` в `.env`)
+- Миграции для уже созданной базы: `uv run python scripts/migrate.py` (новая берёт `db/schema.sql`)
 - Тесты: `uv run pytest`
 - Синтетика: `uv run python scripts/generate_listings.py --config config/demo.yaml --count 2500`
 - Индексация: `uv run python scripts/sync_index.py --config config/demo.yaml`

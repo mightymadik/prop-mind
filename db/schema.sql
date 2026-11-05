@@ -29,11 +29,18 @@ CREATE INDEX ON listings USING gin (features);
 CREATE INDEX ON listings (city, deal_type, rooms, price_kzt);
 
 CREATE TABLE query_log (
-  id          BIGSERIAL PRIMARY KEY,
-  query       TEXT NOT NULL,
-  filters     JSONB,
-  result_ids  BIGINT[],
-  latency_ms  INT,
-  cost_usd    NUMERIC(10,6),
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+  id                 BIGSERIAL PRIMARY KEY,
+  query              TEXT NOT NULL,
+  filters            JSONB,
+  relaxed            TEXT[],                -- какие мягкие фильтры поиск снял
+  clarification      TEXT,                  -- парсер переспросил — поиска не было
+  result_source_ids  TEXT[],                -- выдача в порядке показа
+  answer_model       TEXT,                  -- модель, которая фактически ответила
+  fallback           BOOLEAN,               -- сработал серверный фолбэк
+  invalid_refs       INT,                   -- номера вне списка, вырезанные из ответа
+  error              TEXT,                  -- если запрос упал
+  latency_ms         INT,
+  timings_ms         JSONB,                 -- по этапам: parse, embed, search, rerank, ttft, answer
+  cost_usd           NUMERIC(10,6),         -- оценка сверху: бесплатные токены не учитываются
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT now()
 );
