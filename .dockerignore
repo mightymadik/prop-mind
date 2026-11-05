@@ -9,6 +9,8 @@ evals
 tests
 docs
 deploy
+**/node_modules
+web/chat-app/dist
 # учебные файлы, не часть приложения
 app/rag.py
 app/chunk.py
