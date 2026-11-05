@@ -1,0 +1,939 @@
+{
+  "layer": "search",
+  "modes": [
+    "hybrid",
+    "rerank:rerank-2.5"
+  ],
+  "filters": [
+    "parsed"
+  ],
+  "parsed_from": null,
+  "split": "holdout",
+  "date": "2026-11-05T06:25:30+00:00",
+  "config": "config/demo.yaml",
+  "embeddings": {
+    "provider": "voyage",
+    "model": "voyage-3.5",
+    "dim": 1024,
+    "batch_size": 64
+  },
+  "summary": {
+    "parsed/hybrid": {
+      "cases": 8,
+      "n": 5,
+      "recall_at_10": 1.0,
+      "mrr": 1.0,
+      "by_group": {
+        "ranking": {
+          "n": 0,
+          "recall_at_10": null,
+          "mrr": null
+        },
+        "other": {
+          "n": 5,
+          "recall_at_10": 1.0,
+          "mrr": 1.0
+        }
+      },
+      "by_tag": {
+        "complex": {
+          "n": 2,
+          "recall_at_10": 1.0,
+          "mrr": 1.0
+        },
+        "district_to_city": {
+          "n": 1,
+          "recall_at_10": 1.0,
+          "mrr": 1.0
+        },
+        "kazakh": {
+          "n": 2,
+          "recall_at_10": 1.0,
+          "mrr": 1.0
+        },
+        "negation": {
+          "n": 1,
+          "recall_at_10": 1.0,
+          "mrr": 1.0
+        },
+        "number_format": {
+          "n": 1,
+          "recall_at_10": 1.0,
+          "mrr": 1.0
+        },
+        "simple": {
+          "n": 3,
+          "recall_at_10": 1.0,
+          "mrr": 1.0
+        },
+        "slang": {
+          "n": 1,
+          "recall_at_10": 1.0,
+          "mrr": 1.0
+        }
+      },
+      "empty_relevant": [
+        "h06",
+        "h07",
+        "h08"
+      ],
+      "sql_latency_ms": {
+        "p50": 2,
+        "p95": 6
+      },
+      "unjudged_at_10": {
+        "h06": 2
+      }
+    },
+    "parsed/rerank:rerank-2.5": {
+      "cases": 8,
+      "n": 5,
+      "recall_at_10": 1.0,
+      "mrr": 1.0,
+      "by_group": {
+        "ranking": {
+          "n": 0,
+          "recall_at_10": null,
+          "mrr": null
+        },
+        "other": {
+          "n": 5,
+          "recall_at_10": 1.0,
+          "mrr": 1.0
+        }
+      },
+      "by_tag": {
+        "complex": {
+          "n": 2,
+          "recall_at_10": 1.0,
+          "mrr": 1.0
+        },
+        "district_to_city": {
+          "n": 1,
+          "recall_at_10": 1.0,
+          "mrr": 1.0
+        },
+        "kazakh": {
+          "n": 2,
+          "recall_at_10": 1.0,
+          "mrr": 1.0
+        },
+        "negation": {
+          "n": 1,
+          "recall_at_10": 1.0,
+          "mrr": 1.0
+        },
+        "number_format": {
+          "n": 1,
+          "recall_at_10": 1.0,
+          "mrr": 1.0
+        },
+        "simple": {
+          "n": 3,
+          "recall_at_10": 1.0,
+          "mrr": 1.0
+        },
+        "slang": {
+          "n": 1,
+          "recall_at_10": 1.0,
+          "mrr": 1.0
+        }
+      },
+      "empty_relevant": [
+        "h06",
+        "h07",
+        "h08"
+      ],
+      "sql_latency_ms": {
+        "p50": 525,
+        "p95": 61704
+      },
+      "unjudged_at_10": {
+        "h06": 2,
+        "h07": 3
+      }
+    }
+  },
+  "results": {
+    "parsed/hybrid": [
+      {
+        "id": "h01",
+        "query": "студия в Алматы до 25 млн",
+        "tags": [
+          "simple"
+        ],
+        "relevance": "auto",
+        "group": "other",
+        "n_candidates": 34,
+        "n_relevant": 34,
+        "latency_ms": 2,
+        "hits": 10,
+        "recall": 1.0,
+        "rr": 1.0,
+        "filters": {
+          "city": "Алматы",
+          "deal_type": "sale",
+          "rooms": [
+            1
+          ],
+          "price_min_kzt": null,
+          "price_max_kzt": 25000000,
+          "area_min_m2": null,
+          "districts": null,
+          "conditions": null,
+          "features": [],
+          "semantic_query": "",
+          "needs_clarification": null
+        },
+        "parsed_ok": true,
+        "clarified": false,
+        "relaxed": [],
+        "top_outside_gold": 0,
+        "unjudged_top10": [],
+        "top10": [
+          "seed-h05-03",
+          "seed-h05-02",
+          "syn-00529",
+          "syn-00520",
+          "syn-00287",
+          "syn-00248",
+          "syn-00099",
+          "syn-00278",
+          "syn-00765",
+          "syn-00338"
+        ]
+      },
+      {
+        "id": "h02",
+        "query": "2 бөлмелі пәтер Астанада, 40 млн-ға дейін",
+        "tags": [
+          "simple",
+          "kazakh"
+        ],
+        "relevance": "auto",
+        "group": "other",
+        "n_candidates": 25,
+        "n_relevant": 25,
+        "latency_ms": 5,
+        "hits": 10,
+        "recall": 1.0,
+        "rr": 1.0,
+        "filters": {
+          "city": "Астана",
+          "deal_type": "sale",
+          "rooms": [
+            2
+          ],
+          "price_min_kzt": null,
+          "price_max_kzt": 40000000,
+          "area_min_m2": null,
+          "districts": null,
+          "conditions": null,
+          "features": [],
+          "semantic_query": "",
+          "needs_clarification": null
+        },
+        "parsed_ok": true,
+        "clarified": false,
+        "relaxed": [],
+        "top_outside_gold": 0,
+        "unjudged_top10": [],
+        "top10": [
+          "seed-d14-07",
+          "syn-00454",
+          "syn-00903",
+          "syn-00467",
+          "seed-d12-06",
+          "seed-d12-07",
+          "syn-00470",
+          "syn-00474",
+          "syn-00894",
+          "seed-d12-03"
+        ]
+      },
+      {
+        "id": "h03",
+        "query": "аренда двушки в Есильском районе",
+        "tags": [
+          "simple",
+          "district_to_city"
+        ],
+        "relevance": "auto",
+        "group": "other",
+        "n_candidates": 21,
+        "n_relevant": 21,
+        "latency_ms": 2,
+        "hits": 10,
+        "recall": 1.0,
+        "rr": 1.0,
+        "filters": {
+          "city": "Астана",
+          "deal_type": "rent",
+          "rooms": [
+            2
+          ],
+          "price_min_kzt": null,
+          "price_max_kzt": null,
+          "area_min_m2": null,
+          "districts": [
+            "Есильский"
+          ],
+          "conditions": null,
+          "features": [],
+          "semantic_query": "",
+          "needs_clarification": null
+        },
+        "parsed_ok": true,
+        "clarified": false,
+        "relaxed": [],
+        "top_outside_gold": 0,
+        "unjudged_top10": [],
+        "top10": [
+          "syn-00689",
+          "syn-00391",
+          "syn-00831",
+          "syn-00834",
+          "syn-00101",
+          "syn-00826",
+          "syn-00388",
+          "syn-00001",
+          "syn-00686",
+          "syn-00394"
+        ]
+      },
+      {
+        "id": "h04",
+        "query": "3к кв в бостандыке, 45-50kk, ипотека, не первый этаж",
+        "tags": [
+          "complex",
+          "slang",
+          "negation"
+        ],
+        "relevance": "llm_reviewed",
+        "group": "other",
+        "n_candidates": 6,
+        "n_relevant": 4,
+        "latency_ms": 2,
+        "hits": 4,
+        "recall": 1.0,
+        "rr": 1.0,
+        "filters": {
+          "city": "Алматы",
+          "deal_type": "sale",
+          "rooms": [
+            3
+          ],
+          "price_min_kzt": 45000000,
+          "price_max_kzt": 50000000,
+          "area_min_m2": null,
+          "districts": [
+            "Бостандыкский"
+          ],
+          "conditions": null,
+          "features": [
+            "mortgage"
+          ],
+          "semantic_query": "не первый этаж",
+          "needs_clarification": null
+        },
+        "parsed_ok": true,
+        "clarified": false,
+        "relaxed": [],
+        "top_outside_gold": 0,
+        "unjudged_top10": [],
+        "top10": [
+          "seed-h04-03",
+          "seed-h04-02",
+          "seed-h04-05",
+          "seed-h04-01",
+          "seed-h04-04",
+          "seed-h04-07"
+        ]
+      },
+      {
+        "id": "h05",
+        "query": "нужна 1-2 комн в Алмалы ауданы с ремонтом и паркингом, бюджет 35 000 000",
+        "tags": [
+          "complex",
+          "kazakh",
+          "number_format"
+        ],
+        "relevance": "auto",
+        "group": "other",
+        "n_candidates": 4,
+        "n_relevant": 4,
+        "latency_ms": 4,
+        "hits": 4,
+        "recall": 1.0,
+        "rr": 1.0,
+        "filters": {
+          "city": "Алматы",
+          "deal_type": "sale",
+          "rooms": [
+            1,
+            2
+          ],
+          "price_min_kzt": null,
+          "price_max_kzt": 35000000,
+          "area_min_m2": null,
+          "districts": [
+            "Алмалинский"
+          ],
+          "conditions": [
+            "renovated"
+          ],
+          "features": [
+            "parking"
+          ],
+          "semantic_query": "",
+          "needs_clarification": null
+        },
+        "parsed_ok": true,
+        "clarified": false,
+        "relaxed": [],
+        "top_outside_gold": 0,
+        "unjudged_top10": [],
+        "top10": [
+          "seed-h05-02",
+          "seed-h05-03",
+          "seed-h05-01",
+          "seed-h05-04"
+        ]
+      },
+      {
+        "id": "h06",
+        "query": "аренда однушки без мебели в Астане до 180к, можно с животными",
+        "tags": [
+          "complex",
+          "negation"
+        ],
+        "relevance": "llm_reviewed",
+        "group": "ranking",
+        "n_candidates": 39,
+        "n_relevant": 0,
+        "latency_ms": 1,
+        "hits": 0,
+        "recall": null,
+        "rr": null,
+        "filters": {
+          "city": "Астана",
+          "deal_type": "rent",
+          "rooms": [
+            1
+          ],
+          "price_min_kzt": null,
+          "price_max_kzt": 180000,
+          "area_min_m2": null,
+          "districts": null,
+          "conditions": null,
+          "features": [],
+          "semantic_query": "можно с животными",
+          "needs_clarification": null
+        },
+        "parsed_ok": true,
+        "clarified": false,
+        "relaxed": [],
+        "top_outside_gold": 0,
+        "unjudged_top10": [
+          "syn-00709",
+          "syn-00180"
+        ],
+        "top10": [
+          "syn-00135",
+          "syn-00856",
+          "syn-00709",
+          "syn-00717",
+          "syn-00182",
+          "syn-00419",
+          "syn-00180",
+          "syn-00130",
+          "syn-00833",
+          "syn-00836"
+        ]
+      },
+      {
+        "id": "h07",
+        "query": "квартира для пожилых родителей: низкий этаж, рядом поликлиника и магазины, Астана",
+        "tags": [
+          "semantic"
+        ],
+        "relevance": "llm_reviewed",
+        "group": "ranking",
+        "n_candidates": 125,
+        "n_relevant": 0,
+        "latency_ms": 6,
+        "hits": 0,
+        "recall": null,
+        "rr": null,
+        "filters": {
+          "city": "Астана",
+          "deal_type": "sale",
+          "rooms": null,
+          "price_min_kzt": null,
+          "price_max_kzt": null,
+          "area_min_m2": null,
+          "districts": null,
+          "conditions": null,
+          "features": [],
+          "semantic_query": "для пожилых родителей, низкий этаж, рядом поликлиника и магазины",
+          "needs_clarification": null
+        },
+        "parsed_ok": true,
+        "clarified": false,
+        "relaxed": [],
+        "top_outside_gold": 0,
+        "unjudged_top10": [],
+        "top10": [
+          "syn-00450",
+          "syn-00893",
+          "syn-00467",
+          "syn-00468",
+          "syn-00458",
+          "syn-00880",
+          "syn-00907",
+          "syn-00440",
+          "syn-00913",
+          "syn-00922"
+        ]
+      },
+      {
+        "id": "h08",
+        "query": "ЖК с закрытым двором и детской площадкой, 3 комнаты, новостройка, Алматы",
+        "tags": [
+          "semantic"
+        ],
+        "relevance": "llm_reviewed",
+        "group": "other",
+        "n_candidates": 7,
+        "n_relevant": 0,
+        "latency_ms": 1,
+        "hits": 0,
+        "recall": null,
+        "rr": null,
+        "filters": {
+          "city": "Алматы",
+          "deal_type": "sale",
+          "rooms": [
+            3
+          ],
+          "price_min_kzt": null,
+          "price_max_kzt": null,
+          "area_min_m2": null,
+          "districts": null,
+          "conditions": null,
+          "features": [
+            "new_building"
+          ],
+          "semantic_query": "ЖК с закрытым двором и детской площадкой",
+          "needs_clarification": null
+        },
+        "parsed_ok": true,
+        "clarified": false,
+        "relaxed": [],
+        "top_outside_gold": 0,
+        "unjudged_top10": [],
+        "top10": [
+          "syn-00668",
+          "syn-00973",
+          "seed-h04-02",
+          "syn-00806",
+          "syn-00262",
+          "syn-00795",
+          "syn-00779"
+        ]
+      }
+    ],
+    "parsed/rerank:rerank-2.5": [
+      {
+        "id": "h01",
+        "query": "студия в Алматы до 25 млн",
+        "tags": [
+          "simple"
+        ],
+        "relevance": "auto",
+        "group": "other",
+        "n_candidates": 34,
+        "n_relevant": 34,
+        "latency_ms": 481,
+        "hits": 10,
+        "recall": 1.0,
+        "rr": 1.0,
+        "filters": {
+          "city": "Алматы",
+          "deal_type": "sale",
+          "rooms": [
+            1
+          ],
+          "price_min_kzt": null,
+          "price_max_kzt": 25000000,
+          "area_min_m2": null,
+          "districts": null,
+          "conditions": null,
+          "features": [],
+          "semantic_query": "",
+          "needs_clarification": null
+        },
+        "parsed_ok": true,
+        "clarified": false,
+        "relaxed": [],
+        "top_outside_gold": 0,
+        "unjudged_top10": [],
+        "top10": [
+          "seed-h05-03",
+          "seed-h05-02",
+          "syn-00665",
+          "syn-00780",
+          "syn-00964",
+          "syn-00529",
+          "syn-00976",
+          "syn-00338",
+          "syn-00812",
+          "syn-00327"
+        ]
+      },
+      {
+        "id": "h02",
+        "query": "2 бөлмелі пәтер Астанада, 40 млн-ға дейін",
+        "tags": [
+          "simple",
+          "kazakh"
+        ],
+        "relevance": "auto",
+        "group": "other",
+        "n_candidates": 25,
+        "n_relevant": 25,
+        "latency_ms": 501,
+        "hits": 10,
+        "recall": 1.0,
+        "rr": 1.0,
+        "filters": {
+          "city": "Астана",
+          "deal_type": "sale",
+          "rooms": [
+            2
+          ],
+          "price_min_kzt": null,
+          "price_max_kzt": 40000000,
+          "area_min_m2": null,
+          "districts": null,
+          "conditions": null,
+          "features": [],
+          "semantic_query": "",
+          "needs_clarification": null
+        },
+        "parsed_ok": true,
+        "clarified": false,
+        "relaxed": [],
+        "top_outside_gold": 0,
+        "unjudged_top10": [],
+        "top10": [
+          "seed-d12-06",
+          "seed-d10-07",
+          "seed-d14-07",
+          "seed-d12-03",
+          "syn-00894",
+          "syn-00470",
+          "seed-d12-04",
+          "seed-d12-01",
+          "syn-00888",
+          "syn-00469"
+        ]
+      },
+      {
+        "id": "h03",
+        "query": "аренда двушки в Есильском районе",
+        "tags": [
+          "simple",
+          "district_to_city"
+        ],
+        "relevance": "auto",
+        "group": "other",
+        "n_candidates": 21,
+        "n_relevant": 21,
+        "latency_ms": 20979,
+        "hits": 10,
+        "recall": 1.0,
+        "rr": 1.0,
+        "filters": {
+          "city": "Астана",
+          "deal_type": "rent",
+          "rooms": [
+            2
+          ],
+          "price_min_kzt": null,
+          "price_max_kzt": null,
+          "area_min_m2": null,
+          "districts": [
+            "Есильский"
+          ],
+          "conditions": null,
+          "features": [],
+          "semantic_query": "",
+          "needs_clarification": null
+        },
+        "parsed_ok": true,
+        "clarified": false,
+        "relaxed": [],
+        "top_outside_gold": 0,
+        "unjudged_top10": [],
+        "top10": [
+          "syn-00689",
+          "syn-00394",
+          "syn-00831",
+          "syn-00834",
+          "syn-00005",
+          "syn-00388",
+          "syn-00157",
+          "syn-00826",
+          "syn-00101",
+          "syn-00001"
+        ]
+      },
+      {
+        "id": "h04",
+        "query": "3к кв в бостандыке, 45-50kk, ипотека, не первый этаж",
+        "tags": [
+          "complex",
+          "slang",
+          "negation"
+        ],
+        "relevance": "llm_reviewed",
+        "group": "other",
+        "n_candidates": 6,
+        "n_relevant": 4,
+        "latency_ms": 61377,
+        "hits": 4,
+        "recall": 1.0,
+        "rr": 1.0,
+        "filters": {
+          "city": "Алматы",
+          "deal_type": "sale",
+          "rooms": [
+            3
+          ],
+          "price_min_kzt": 45000000,
+          "price_max_kzt": 50000000,
+          "area_min_m2": null,
+          "districts": [
+            "Бостандыкский"
+          ],
+          "conditions": null,
+          "features": [
+            "mortgage"
+          ],
+          "semantic_query": "не первый этаж",
+          "needs_clarification": null
+        },
+        "parsed_ok": true,
+        "clarified": false,
+        "relaxed": [],
+        "top_outside_gold": 0,
+        "unjudged_top10": [],
+        "top10": [
+          "seed-h04-03",
+          "seed-h04-02",
+          "seed-h04-04",
+          "seed-h04-01",
+          "seed-h04-07",
+          "seed-h04-05"
+        ]
+      },
+      {
+        "id": "h05",
+        "query": "нужна 1-2 комн в Алмалы ауданы с ремонтом и паркингом, бюджет 35 000 000",
+        "tags": [
+          "complex",
+          "kazakh",
+          "number_format"
+        ],
+        "relevance": "auto",
+        "group": "other",
+        "n_candidates": 4,
+        "n_relevant": 4,
+        "latency_ms": 490,
+        "hits": 4,
+        "recall": 1.0,
+        "rr": 1.0,
+        "filters": {
+          "city": "Алматы",
+          "deal_type": "sale",
+          "rooms": [
+            1,
+            2
+          ],
+          "price_min_kzt": null,
+          "price_max_kzt": 35000000,
+          "area_min_m2": null,
+          "districts": [
+            "Алмалинский"
+          ],
+          "conditions": [
+            "renovated"
+          ],
+          "features": [
+            "parking"
+          ],
+          "semantic_query": "",
+          "needs_clarification": null
+        },
+        "parsed_ok": true,
+        "clarified": false,
+        "relaxed": [],
+        "top_outside_gold": 0,
+        "unjudged_top10": [],
+        "top10": [
+          "seed-h05-04",
+          "seed-h05-01",
+          "seed-h05-03",
+          "seed-h05-02"
+        ]
+      },
+      {
+        "id": "h06",
+        "query": "аренда однушки без мебели в Астане до 180к, можно с животными",
+        "tags": [
+          "complex",
+          "negation"
+        ],
+        "relevance": "llm_reviewed",
+        "group": "ranking",
+        "n_candidates": 39,
+        "n_relevant": 0,
+        "latency_ms": 549,
+        "hits": 0,
+        "recall": null,
+        "rr": null,
+        "filters": {
+          "city": "Астана",
+          "deal_type": "rent",
+          "rooms": [
+            1
+          ],
+          "price_min_kzt": null,
+          "price_max_kzt": 180000,
+          "area_min_m2": null,
+          "districts": null,
+          "conditions": null,
+          "features": [],
+          "semantic_query": "можно с животными",
+          "needs_clarification": null
+        },
+        "parsed_ok": true,
+        "clarified": false,
+        "relaxed": [],
+        "top_outside_gold": 0,
+        "unjudged_top10": [
+          "syn-00115",
+          "syn-00709"
+        ],
+        "top10": [
+          "syn-00699",
+          "syn-00135",
+          "syn-00115",
+          "syn-00162",
+          "syn-00182",
+          "syn-00836",
+          "syn-00717",
+          "syn-00856",
+          "syn-00709",
+          "syn-00132"
+        ]
+      },
+      {
+        "id": "h07",
+        "query": "квартира для пожилых родителей: низкий этаж, рядом поликлиника и магазины, Астана",
+        "tags": [
+          "semantic"
+        ],
+        "relevance": "llm_reviewed",
+        "group": "ranking",
+        "n_candidates": 125,
+        "n_relevant": 0,
+        "latency_ms": 61704,
+        "hits": 0,
+        "recall": null,
+        "rr": null,
+        "filters": {
+          "city": "Астана",
+          "deal_type": "sale",
+          "rooms": null,
+          "price_min_kzt": null,
+          "price_max_kzt": null,
+          "area_min_m2": null,
+          "districts": null,
+          "conditions": null,
+          "features": [],
+          "semantic_query": "для пожилых родителей, низкий этаж, рядом поликлиника и магазины",
+          "needs_clarification": null
+        },
+        "parsed_ok": true,
+        "clarified": false,
+        "relaxed": [],
+        "top_outside_gold": 0,
+        "unjudged_top10": [
+          "syn-00465",
+          "seed-d10-06",
+          "syn-00920"
+        ],
+        "top10": [
+          "syn-00893",
+          "syn-00450",
+          "syn-00915",
+          "syn-00468",
+          "syn-00465",
+          "seed-d10-06",
+          "syn-00888",
+          "syn-00920",
+          "syn-00448",
+          "syn-00452"
+        ]
+      },
+      {
+        "id": "h08",
+        "query": "ЖК с закрытым двором и детской площадкой, 3 комнаты, новостройка, Алматы",
+        "tags": [
+          "semantic"
+        ],
+        "relevance": "llm_reviewed",
+        "group": "other",
+        "n_candidates": 7,
+        "n_relevant": 0,
+        "latency_ms": 481,
+        "hits": 0,
+        "recall": null,
+        "rr": null,
+        "filters": {
+          "city": "Алматы",
+          "deal_type": "sale",
+          "rooms": [
+            3
+          ],
+          "price_min_kzt": null,
+          "price_max_kzt": null,
+          "area_min_m2": null,
+          "districts": null,
+          "conditions": null,
+          "features": [
+            "new_building"
+          ],
+          "semantic_query": "ЖК с закрытым двором и детской площадкой",
+          "needs_clarification": null
+        },
+        "parsed_ok": true,
+        "clarified": false,
+        "relaxed": [],
+        "top_outside_gold": 0,
+        "unjudged_top10": [],
+        "top10": [
+          "syn-00668",
+          "syn-00973",
+          "seed-h04-02",
+          "syn-00795",
+          "syn-00262",
+          "syn-00806",
+          "syn-00779"
+        ]
+      }
+    ]
+  }
+}
