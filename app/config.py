@@ -24,6 +24,12 @@ class EmbeddingsConfig(BaseModel):
     batch_size: int = 128
 
 
+class RerankConfig(BaseModel):
+    provider: str
+    model: str
+    candidates: int = 50  # сколько кандидатов гибрида переранжировать
+
+
 class AppConfig(BaseModel):
     """Несекретные настройки из config/*.yaml."""
 
@@ -35,6 +41,7 @@ class AppConfig(BaseModel):
     features: dict[str, str]
     models: dict[str, str]
     embeddings: EmbeddingsConfig
+    rerank: RerankConfig
     limits: dict[str, float]
 
 

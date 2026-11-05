@@ -30,6 +30,11 @@ embeddings:
   dim: 1024                      # = vector(...) в db/schema.sql
   batch_size: 64                 # ~6–7K токенов: влезает в 10K TPM бесплатного тарифа Voyage
 
+rerank:
+  provider: voyage
+  model: rerank-3                # rerank-2.5 — многоязычный по документации; сравниваем на evals
+  candidates: 50                 # топ гибрида на переранжирование; ~6K токенов на запрос
+
 limits:
   daily_budget_usd: 2
   requests_per_minute_per_ip: 10
