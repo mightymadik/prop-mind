@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Демо-сайт с виджетом</title>
+  <link rel="stylesheet" href="/static/demo-host.css">
+  <script src="/widget.js" data-site-key="pub_demo" defer></script>
+  <script src="/static/demo-host.js" defer></script>
+</head>
+<body>
+  <main>
+    <h1>Агентство недвижимости (демо-сайт)</h1>
+    <p>Тестовая страница «чужого» сайта: виджет подключён одной строкой
+      <code>&lt;script src="/widget.js" data-site-key="pub_demo"&gt;</code>. Кнопка — справа внизу.</p>
+    <p>Клик по объекту в чате — событие <code>prop-mind:listing</code>; сайт сам решает, что открыть:</p>
+    <p id="picked" role="status" aria-live="polite">Объект ещё не выбран.</p>
+  </main>
+</body>
+</html>

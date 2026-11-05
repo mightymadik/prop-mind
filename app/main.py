@@ -1,20 +1,28 @@
 import contextvars
 import json
+import math
 import queue
 import threading
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app.config import get_settings, load_config
 from app.db import connect
+from app.limits import RateLimiter, budget_left, frame_ancestors
 from app.llm.parser import parse_query
 from app.schemas import SearchFilters
 from app.service import run_search
 
 app = FastAPI(title="prop-mind")
+WEB = Path(__file__).resolve().parent.parent / "web"
+app.mount("/static", StaticFiles(directory=WEB), name="static")
 cfg = load_config(get_settings().config_path)
+limiter = RateLimiter(cfg.limits.requests_per_minute_per_ip)
+BUDGET_EXHAUSTED = "Лимит демо на сегодня исчерпан — попробуйте завтра."
 
 LISTING_SQL = """SELECT source_id, city, district, complex_name, deal_type, rooms, area_m2, floor, floors_total,
                         year_built, condition, price_kzt, features, description
@@ -39,6 +47,24 @@ LISTING_FIELDS = (
 
 class QueryIn(BaseModel):
     query: str = Field(min_length=1, max_length=500)
+    site_key: str | None = Field(None, max_length=64)
+
+
+def guard(request: Request, site_key: str | None) -> None:
+    """Перед вызовом моделей: site-key → лимит IP (в памяти) → дневной бюджет (по query_log)."""
+    if site_key is not None and site_key not in cfg.sites:
+        raise HTTPException(403, "unknown site key")
+    ip = request.client.host if request.client else "unknown"  # за прокси — из X-Forwarded-For (uvicorn)
+    wait = limiter.check(ip)
+    if wait:
+        raise HTTPException(429, "Слишком много запросов — подождите минуту.", {"Retry-After": str(math.ceil(wait))})
+    try:
+        with connect() as conn:
+            ok = budget_left(conn, cfg)
+    except Exception as e:  # noqa: BLE001 — без базы бюджет не проверить: не тратим ключи вслепую
+        raise HTTPException(503, "service unavailable") from e
+    if not ok:
+        raise HTTPException(429, BUDGET_EXHAUSTED)
 
 
 @app.get("/health")
@@ -59,8 +85,9 @@ def health() -> dict:
 
 
 @app.post("/parse")
-def parse(body: QueryIn) -> SearchFilters:
+def parse(body: QueryIn, request: Request) -> SearchFilters:
     """Только разбор запроса в фильтры: для отладки и evals."""
+    guard(request, body.site_key)
     try:
         return parse_query(body.query, cfg, get_settings())
     except Exception as e:  # noqa: BLE001 — сбой LLM → 502, а не 500 со стектрейсом
@@ -78,6 +105,37 @@ def listing(source_id: str) -> dict:
     return d
 
 
+def page_csp(ancestors: str) -> str:
+    """Без инлайн-скриптов и сторонних ресурсов; встраивать в iframe — только разрешённым сайтам."""
+    return (
+        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+        f"connect-src 'self'; frame-ancestors {ancestors}; base-uri 'none'; form-action 'self'"
+    )
+
+
+@app.get("/chat")
+def chat_page(site_key: str | None = None) -> FileResponse:
+    """Страница чата; ?embed=1 — режим виджета, ?stream=0 — без стриминга (Quick Tunnel)."""
+    if site_key is not None and site_key not in cfg.sites:
+        raise HTTPException(403, "unknown site key")
+    return FileResponse(
+        WEB / "chat" / "index.html", headers={"Content-Security-Policy": page_csp(frame_ancestors(cfg, site_key))}
+    )
+
+
+@app.get("/widget.js")
+def widget() -> FileResponse:
+    return FileResponse(
+        WEB / "widget.js", media_type="text/javascript", headers={"Cache-Control": "public, max-age=300"}
+    )
+
+
+@app.get("/demo-host")
+def demo_host() -> FileResponse:
+    """Тестовая страница «чужого» сайта с виджетом (тот же домен — для проверки встраивания)."""
+    return FileResponse(WEB / "demo-host.html", headers={"Content-Security-Policy": page_csp("'none'")})
+
+
 def sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
@@ -86,6 +144,7 @@ def sse(event: str, data: dict) -> str:
 def search_endpoint(body: QueryIn, request: Request):
     """{query} → разбор, поиск, ответ. С `Accept: text/event-stream` — SSE: filters, results, delta*, answer
     (или clarification), done; при сбое — error. Номер [n] в delta — n-й объект из события results."""
+    guard(request, body.site_key)  # до начала потока: отказ — обычный HTTP 403/429/503
     settings = get_settings()
     if "text/event-stream" not in request.headers.get("accept", ""):
         try:

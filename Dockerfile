@@ -7,6 +7,7 @@ COPY config ./config
 COPY db ./db
 COPY scripts ./scripts
 COPY data ./data
+COPY web ./web
 # порт — из $PORT (Cloud Run задаёт 8080), локально и за Caddy — 8000.
 # Заголовки X-Forwarded-* uvicorn принимает только от FORWARDED_ALLOW_IPS (по умолчанию 127.0.0.1),
 # иначе IP для лимитов можно подделать.
