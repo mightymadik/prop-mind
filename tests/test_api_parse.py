@@ -115,20 +115,50 @@ def test_forwarded_ip_ignored_without_trusted_proxy(monkeypatch):
     assert client.post("/search", json={"query": "q"}, headers={"x-forwarded-for": "2.2.2.2"}).status_code == 429
 
 
-def test_chat_page_csp_and_assets():
+@pytest.fixture
+def chat_dist(tmp_path, monkeypatch):
+    """Подставная сборка: тесты маршрутов и CSP не зависят от Node."""
+    (tmp_path / "index.html").write_text(
+        '<!doctype html><div id="root"></div><script type="module" src="/static/chat/assets/x.js"></script>',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(main, "CHAT_DIST", tmp_path)
+    return tmp_path
+
+
+def test_chat_page_csp_and_assets(chat_dist):
     r = client.get("/chat")
     assert r.status_code == 200 and "text/html" in r.headers["content-type"]
     csp = r.headers["content-security-policy"]
     assert "frame-ancestors 'self'" in csp and "script-src 'self'" in csp and "unsafe-inline" not in csp
     assert client.get("/chat?site_key=pub_demo").status_code == 200
     assert client.get("/chat?site_key=pub_evil").status_code == 403
-    for path in ("/static/chat/chat.js", "/static/chat/chat.css", "/static/widget.css", "/widget.js", "/demo-host"):
+    for path in ("/static/widget.css", "/widget.js", "/demo-host"):
         assert client.get(path).status_code == 200, path
     assert "javascript" in client.get("/widget.js").headers["content-type"]
 
 
-def test_chat_page_has_no_inline_script():
-    html = client.get("/chat").text
+def test_chat_page_not_built_is_503(tmp_path, monkeypatch):
+    monkeypatch.setattr(main, "CHAT_DIST", tmp_path / "missing")
+    r = client.get("/chat")
+    assert r.status_code == 503 and "npm run build" in r.json()["detail"]
+
+
+def test_chat_page_has_no_inline_script(chat_dist):
     import re
 
+    html = client.get("/chat").text
     assert not re.search(r"<script(?![^>]*\bsrc=)[^>]*>", html)  # строгая CSP: только внешние скрипты
+
+
+def test_real_build_has_no_inline_code_and_assets_are_served():
+    """Настоящая сборка Vite (если собрана): ресурсы отдаются, инлайн-скриптов и стилей нет."""
+    import re
+
+    index = main.CHAT_DIST / "index.html"
+    if not index.exists():
+        pytest.skip("сборка не собрана: cd web/chat-app && npm run build")
+    html = index.read_text(encoding="utf-8")
+    assert not re.search(r"<script(?![^>]*\bsrc=)[^>]*>", html) and "<style" not in html
+    for src in re.findall(r'(?:src|href)="(/static/chat/[^"]+)"', html):
+        assert client.get(src).status_code == 200, src

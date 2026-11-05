@@ -19,6 +19,10 @@ from app.service import run_search
 
 app = FastAPI(title="prop-mind")
 WEB = Path(__file__).resolve().parent.parent / "web"
+# сборка React-страницы (npm run build в web/chat-app); в git её нет — собирает Docker или разработчик
+CHAT_DIST = WEB / "chat-app" / "dist"
+# /static/chat — раньше общего /static: иначе запросы к ресурсам сборки уйдут в web/
+app.mount("/static/chat", StaticFiles(directory=CHAT_DIST, check_dir=False), name="chat-assets")
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 cfg = load_config(get_settings().config_path)
 limiter = RateLimiter(cfg.limits.requests_per_minute_per_ip)
@@ -118,9 +122,10 @@ def chat_page(site_key: str | None = None) -> FileResponse:
     """Страница чата; ?embed=1 — режим виджета, ?stream=0 — без стриминга (Quick Tunnel)."""
     if site_key is not None and site_key not in cfg.sites:
         raise HTTPException(403, "unknown site key")
-    return FileResponse(
-        WEB / "chat" / "index.html", headers={"Content-Security-Policy": page_csp(frame_ancestors(cfg, site_key))}
-    )
+    index = CHAT_DIST / "index.html"
+    if not index.exists():
+        raise HTTPException(503, "chat page is not built: cd web/chat-app && npm ci && npm run build")
+    return FileResponse(index, headers={"Content-Security-Policy": page_csp(frame_ancestors(cfg, site_key))})
 
 
 @app.get("/widget.js")
