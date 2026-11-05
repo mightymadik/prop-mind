@@ -6,3 +6,4 @@ __pycache__/
 config/prod.yaml
 deploy/**/.env
 deploy/cloudrun/env.yaml
+.DS_Store
