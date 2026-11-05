@@ -200,6 +200,14 @@ def search_mode(value: str) -> str:
     raise argparse.ArgumentTypeError(f"режим {value!r}: vector, hybrid или rerank:<модель>")
 
 
+def search_variant(value: str) -> str:
+    """<gold|parsed>/<метод>: сочетание источника фильтров и метода поиска."""
+    src, _, mode = value.partition("/")
+    if src not in ("gold", "parsed"):
+        raise argparse.ArgumentTypeError(f"вариант {value!r}: источник gold или parsed")
+    return f"{src}/{search_mode(mode)}"
+
+
 class RerankCache:
     """Кэш порядка от реранкера: ключ — модель + запрос + кандидаты. Прогоны воспроизводимы и бесплатны."""
 
@@ -344,6 +352,8 @@ def run_search(args, cfg, settings) -> None:
     """
     cases = [c for c in load_cases(args.split) if "relevant_source_ids" in c]
     gold = {c["id"]: SearchFilters.model_validate(c["expected_filters"]) for c in cases}
+    variants = args.variants or [f"{src}/{m}" for src in args.filters for m in args.modes]
+    args.filters = list(dict.fromkeys(v.split("/", 1)[0] for v in variants))
     sources: dict[str, dict[str, SearchFilters | str]] = {}
     if "gold" in args.filters:
         sources["gold"] = dict(gold)
@@ -365,7 +375,7 @@ def run_search(args, cfg, settings) -> None:
     uniq = sorted({t for t in texts.values() if t})
     vec_of = dict(zip(uniq, embed_queries(uniq, cfg, settings), strict=True))
 
-    by_mode: dict[str, list[dict]] = {f"{src}/{m}": [] for src in sources for m in args.modes}
+    by_mode: dict[str, list[dict]] = {v: [] for v in variants}
     rerank_cache = RerankCache(RERANK_CACHE)
     with connect() as conn:
         for c in cases:
@@ -377,7 +387,7 @@ def run_search(args, cfg, settings) -> None:
                 parsed_ok = None
                 if src == "parsed":
                     parsed_ok = isinstance(f, SearchFilters) and all(compare_filters(f, c).values())
-                for mode in args.modes:
+                for mode in (v.split("/", 1)[1] for v in variants if v.startswith(src + "/")):
                     clarified = not isinstance(f, SearchFilters) or bool(f.needs_clarification)
                     t = time.perf_counter()
                     if clarified:  # парсер переспросил или упал — выдачи нет
@@ -438,7 +448,11 @@ def run_search(args, cfg, settings) -> None:
         "summary": summaries,
         "results": by_mode,
     }
-    tag = "+".join(args.modes) + ("" if args.filters == ["gold"] else "_" + "+".join(args.filters))
+    tag = (
+        "+".join(v.replace("/", "-") for v in args.variants)
+        if args.variants
+        else "+".join(args.modes) + ("" if args.filters == ["gold"] else "_" + "+".join(args.filters))
+    )
     out = ROOT / "results" / f"{now:%Y%m%dT%H%M%SZ}_search_{tag}_{args.split}.json"
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -495,6 +509,12 @@ def main() -> None:
         "--filters", nargs="+", default=["gold"], choices=["gold", "parsed"], help="search: источник фильтров"
     )
     ap.add_argument("--parsed-from", type=Path, help="search: взять фильтры от парсера из этого отчёта")
+    ap.add_argument(
+        "--variants",
+        nargs="+",
+        type=search_variant,
+        help="search: только эти сочетания источник/метод, например gold/vector parsed/rerank:rerank-2.5",
+    )
     ap.add_argument("--split", default="dev", choices=["dev", "holdout"])
     ap.add_argument("--repeats", type=int, default=1, help="parse: прогонов на кейс, оценка разброса")
     ap.add_argument("--workers", type=int, default=4)

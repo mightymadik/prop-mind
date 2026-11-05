@@ -206,3 +206,17 @@ def test_rerank_cache_computes_once_and_persists(tmp_path):
     assert calls == [1]  # второй раз — из файла
     RerankCache(path).get_or_compute("m2", "q", ["a", "b"], lambda: calls.append(1) or ["a", "b"])
     assert calls == [1, 1]  # другая модель — другой ключ
+
+
+def test_search_variant_validation():
+    import argparse
+
+    import pytest
+
+    from evals.run_evals import search_variant
+
+    assert search_variant("gold/vector") == "gold/vector"
+    assert search_variant("parsed/rerank:rerank-2.5") == "parsed/rerank:rerank-2.5"
+    for bad in ("vector", "oracle/vector", "parsed/bm25"):
+        with pytest.raises(argparse.ArgumentTypeError):
+            search_variant(bad)
