@@ -28,7 +28,10 @@ v1 — фиксированный workflow. v2 (tool use) — только по�
 - Окружение: `uv sync` (Python 3.12, `.venv`); `cp .env.example .env` и вписать ключи
 - Запуск: `docker compose up` (порт БД на хосте — `DB_PORT` в `.env`)
 - Миграции для уже созданной базы: `uv run python scripts/migrate.py` (новая берёт `db/schema.sql`)
-- Тесты: `uv run pytest`
+- Страница чата (React + TS + Vite, Tailwind 4 + shadcn/ui, Node 22; компоненты shadcn — в `src/components/ui/`, добавлять: `npx shadcn@4.23.0 add <имя>`): `cd web/chat-app && npm ci && npm run build` — сборка в
+  `web/chat-app/dist/` (не в git), её раздаёт FastAPI на `/chat`; разработка: `npm run dev` (прокси на :8000).
+  Docker собирает её сам.
+- Тесты: `uv run pytest`; страницы чата: `cd web/chat-app && npm test && npm run typecheck`
 - Синтетика: `uv run python scripts/generate_listings.py --config config/demo.yaml --count 2500`
 - Индексация: `uv run python scripts/sync_index.py --config config/demo.yaml`
 - Evals: `uv run python evals/run_evals.py --config config/demo.yaml` (шаг 2)

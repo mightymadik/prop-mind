@@ -9,12 +9,14 @@ AI-поиск недвижимости: запрос обычным языком
 
 ```bash
 cp .env.example .env            # ANTHROPIC_API_KEY, VOYAGE_API_KEY
-docker compose up -d            # Postgres + pgvector, API на :8000
+docker compose up -d --build    # Postgres + pgvector, API на :8000 (страницу чата Docker соберёт сам)
 uv sync
 uv run python scripts/generate_listings.py --config config/demo.yaml --count 2500
 uv run python scripts/sync_index.py --config config/demo.yaml
-curl localhost:8000/health
+curl localhost:8000/health      # чат: http://localhost:8000/chat
 ```
+
+Без Docker страницу чата нужно собрать один раз (Node 22): `cd web/chat-app && npm ci && npm run build`.
 
 ## Результаты evals
 
