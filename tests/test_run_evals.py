@@ -284,3 +284,39 @@ def test_grades_accept_any_dash():
 
     text = "## d01: q\nОценка A (1-5): 5\nОценка B (1—5): 3 \n"
     assert parse_grades(text) == {"d01": {"A": 5, "B": 3}}
+
+
+def test_answer_checks_by_case_kind():
+    from evals.run_evals import answer_checks
+
+    row = {"id": "r01", "relaxed": ["features", "conditions"]}
+    checks = answer_checks(row, {"split": "relax"})
+    assert list(checks) == ["mentions_relaxation"] and "признаки, состояние" in checks["mentions_relaxation"]
+    assert list(answer_checks({"id": "d16", "relaxed": []}, {})) == ["states_no_match"]
+    labeled_empty = {"relevance": "llm_reviewed", "relevant_source_ids": []}
+    assert list(answer_checks({"id": "x1", "relaxed": []}, labeled_empty)) == ["states_no_match"]
+    auto_empty = {"relevance": "auto", "relevant_source_ids": []}
+    assert answer_checks({"id": "x2", "relaxed": []}, auto_empty) == {}
+
+
+def test_expand_cases_splits_and_dedupes():
+    from evals.run_evals import expand_cases
+
+    cases = {"d01": {"split": "dev"}, "d02": {"split": "dev"}, "r01": {"split": "relax"}, "h01": {"split": "holdout"}}
+    assert expand_cases(["d02", "split:dev", "split:relax"], cases) == ["d02", "d01", "r01"]
+
+
+def test_judge_fills_criterion(monkeypatch):
+    from app.config import Settings, load_config
+    from evals import run_evals
+
+    sent = {}
+    monkeypatch.setattr(
+        run_evals, "call_structured", lambda **kw: sent.update(kw) or run_evals.Verdict(verdict=True, reason="ok")
+    )
+    cfg = load_config("config/demo.yaml")
+    v = run_evals.judge("КРИТЕРИЙ-X", "двушка", {"relaxed": ["features"], "ids": ["a"]}, "ОТВЕТ", cfg, Settings())
+    assert v.verdict and sent["model"] == cfg.models["judge"]
+    assert "КРИТЕРИЙ-X" in sent["system"] and "$check" not in sent["system"]
+    assert "ОТВЕТ" in sent["user"] and "двушка" in sent["user"]
+    assert "признаки" in sent["user"] and "features" not in sent["user"]

@@ -20,12 +20,15 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
+from string import Template
 from typing import Any
+
+from pydantic import BaseModel
 
 from app.config import get_settings, load_config
 from app.db import connect
 from app.llm.answer import cost_usd, generate_answer
-from app.llm.client import PROMPTS_DIR
+from app.llm.client import PROMPTS_DIR, call_structured, load_prompt
 from app.llm.parser import PROMPT_FILE, parse_query
 from app.pipeline import retrieve
 from app.schemas import SearchFilters
@@ -580,25 +583,101 @@ def write_blind_review(results: list[dict], models: list[str], stamp: str) -> tu
     return review, key_path
 
 
+class Verdict(BaseModel):
+    verdict: bool
+    reason: str
+
+
+RELAX_RU = {"features": "признаки", "conditions": "состояние", "districts": "район"}
+
+
+def answer_checks(row: dict, case: dict) -> dict[str, str]:
+    """Какие критерии проверять судьёй для этого ответа: имя → текст критерия."""
+    checks = {}
+    if row["relaxed"]:
+        snyato = ", ".join(RELAX_RU.get(x, x) for x in row["relaxed"])
+        checks["mentions_relaxation"] = (
+            f"Ответ явно сообщает, что поиск ослабил условия запроса, и называет, какие именно: {snyato}."
+        )
+    no_match = row["id"] in NO_MATCH_CASES or (
+        case.get("relevance") in ("manual", "llm_reviewed") and case.get("relevant_source_ids") == []
+    )
+    if no_match:
+        checks["states_no_match"] = (
+            "Ответ прямо говорит, что объектов, подходящих по смыслу запроса, нет (не выдаёт найденное за "
+            "подходящее), и предлагает, что можно изменить в запросе."
+        )
+    return checks
+
+
+def judge(check: str, query: str, row: dict, text: str, cfg, settings) -> Verdict:
+    # по-русски: служебные ключи (features) судья принимал за требование назвать их дословно
+    relaxed = ", ".join(RELAX_RU.get(x, x) for x in row["relaxed"]) or "ничего"
+    context = f"Поиск ослабил условия: {relaxed}; кандидатов: {len(row['ids'])}"
+    return call_structured(
+        api_key=settings.anthropic_api_key,
+        model=cfg.models["judge"],
+        system=Template(load_prompt("judge_answer.md")).substitute(check=check),
+        user=f"Запрос: {query}\n{context}\n\nОтвет ассистента:\n{text}",
+        output=Verdict,
+    )
+
+
+def expand_cases(tokens: list[str], all_cases: dict[str, dict]) -> list[str]:
+    """id кейсов; «split:dev» раскрывается во все кейсы набора."""
+    out: list[str] = []
+    for t in tokens:
+        ids = [cid for cid, c in all_cases.items() if c["split"] == t[6:]] if t.startswith("split:") else [t]
+        out += [cid for cid in ids if cid not in out]
+    return out
+
+
+def cached_retrieval_fns(cfg, settings):
+    """embed_fn / rerank_fn для retrieve() поверх кэшей evals: прогоны воспроизводимы, лимит Voyage не мешает."""
+    cache = RerankCache(RERANK_CACHE)
+    model, n = cfg.rerank.model, cfg.rerank.candidates
+
+    def embed_fn(text: str) -> str:
+        return embed_queries([text], cfg, settings)[0]
+
+    def rerank_fn(conn, ids: list[str], text: str) -> list[str]:
+        head = cache.get_or_compute(
+            model, text, ids[:n], lambda: rerank_ids(conn, ids[:n], text, cfg.rerank, settings.voyage_api_key)
+        )
+        return head + ids[n:]
+
+    return embed_fn, rerank_fn
+
+
 def run_answer(args, cfg, settings) -> None:
     """Ответ на одинаковых выдачах для каждой модели из --models. Тексты — в файл на проверку человеку,
-    в консоль — только цифры (в наборе есть holdout-кейсы)."""
+    в консоль — только цифры и вердикты судьи (в наборе могут быть holdout-кейсы)."""
     all_cases = {
         c["id"]: c for c in (json.loads(ln) for ln in (ROOT / "cases.jsonl").open(encoding="utf-8") if ln.strip())
     }
+    case_ids = expand_cases(args.cases, all_cases)
     frozen: dict[str, SearchFilters | str] = {}
     for path in args.parsed_from or []:
         frozen |= parsed_from_report(json.loads(path.read_text(encoding="utf-8")))
+    embed_fn, rerank_fn = cached_retrieval_fns(cfg, settings)
     results = []
     with connect() as conn:
-        for cid in args.cases:
+        for cid in case_ids:
             c = all_cases[cid]
             f = frozen.get(cid)
-            r = retrieve(conn, c["query"], cfg, settings, filters=f if isinstance(f, SearchFilters) else None)
+            r = retrieve(
+                conn,
+                c["query"],
+                cfg,
+                settings,
+                filters=f if isinstance(f, SearchFilters) else None,
+                embed_fn=embed_fn,
+                rerank_fn=rerank_fn,
+            )
             row = {
                 "id": cid,
+                "split": c["split"],
                 "query": c["query"],
-                "no_match": cid in NO_MATCH_CASES,
                 "filters": r.filters.model_dump(exclude_defaults=True),
                 "relaxed": r.relaxed,
                 "clarification": r.clarification,
@@ -606,15 +685,24 @@ def run_answer(args, cfg, settings) -> None:
                 "retrieval_ms": r.timings_ms,
                 "answers": {},
             }
+            row["no_match"] = "states_no_match" in answer_checks(row, c)
             if not r.clarification:
                 for m in args.models:
                     a = generate_answer(c["query"], r.filters, r.relaxed, r.rows, cfg, settings.anthropic_api_key, m)
-                    row["answers"][m] = {**a.__dict__, "cost_usd": round(cost_usd(a, cfg), 6)}
+                    entry = {**a.__dict__, "cost_usd": round(cost_usd(a, cfg), 6), "checks": {}}
+                    if args.judge:
+                        for name, check in answer_checks(row, c).items():
+                            v = judge(check, c["query"], row, a.text, cfg, settings)
+                            entry["checks"][name] = {"verdict": v.verdict, "reason": v.reason}
+                    row["answers"][m] = entry
+                    verdicts = {k: v["verdict"] for k, v in entry["checks"].items()}
                     print(
                         f"{cid} {m}: первый токен {a.ttft_ms} мс, всего {a.total_ms} мс, "
-                        f"токены {a.input_tokens}/{a.output_tokens}, ${cost_usd(a, cfg):.5f}, "
-                        f"чужих номеров {len(a.invalid_refs)}, stop {a.stop_reason}"
+                        f"${entry['cost_usd']:.5f}, чужих номеров {len(a.invalid_refs)}, stop {a.stop_reason}"
+                        + (f", судья {verdicts}" if verdicts else "")
                     )
+            else:
+                print(f"{cid}: парсер переспросил — ответа нет")
             results.append(row)
 
     summary = {}
@@ -622,13 +710,20 @@ def run_answer(args, cfg, settings) -> None:
         ans = [r["answers"][m] for r in results if m in r["answers"]]
         ttft = [a["ttft_ms"] for a in ans if a["ttft_ms"] is not None]
         total = [a["total_ms"] for a in ans]
+        checks: dict[str, list[bool]] = {}
+        for a in ans:
+            for name, v in a["checks"].items():
+                checks.setdefault(name, []).append(v["verdict"])
         summary[m] = {
             "answers": len(ans),
+            "clarified": sum(bool(r["clarification"]) for r in results),
             "ttft_ms": {"p50": int(statistics.median(ttft)), "p95": pct(ttft, 0.95)},
             "total_ms": {"p50": int(statistics.median(total)), "p95": pct(total, 0.95)},
             "usd_per_answer": round(statistics.fmean(a["cost_usd"] for a in ans), 6),
             "answers_with_invalid_refs": sum(bool(a["invalid_refs"]) for a in ans),
             "refusals": sum(a["stop_reason"] == "refusal" for a in ans),
+            "fallbacks": sum(bool(a.get("fallback")) for a in ans),
+            "checks": {k: {"passed": sum(v), "of": len(v)} for k, v in checks.items()},
         }
     now = datetime.now(UTC)
     stamp = f"{now:%Y%m%dT%H%M%SZ}"
@@ -636,23 +731,52 @@ def run_answer(args, cfg, settings) -> None:
         "layer": "answer",
         "date": now.isoformat(timespec="seconds"),
         "models": args.models,
+        "cases": case_ids,
+        "parsed_from": [str(p) for p in args.parsed_from] if args.parsed_from else None,
         "summary": summary,
         "results": results,
     }
-    out = ROOT / "results" / f"{stamp}_answer_{'+'.join(args.models)}.json"
+    tag = "+".join(args.models) + ("_" + args.tag if args.tag else "")
+    out = ROOT / "results" / f"{stamp}_answer_{tag}.json"
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-    review, key_path = write_blind_review(results, args.models, stamp)
     for m, s in summary.items():
         print(
-            f"answer/{m}: {s['answers']} ответов, "
+            f"answer/{m}: {s['answers']} ответов (переспросил {s['clarified']}), "
             f"первый токен p50 {s['ttft_ms']['p50']} / p95 {s['ttft_ms']['p95']} мс, "
             f"всего p50 {s['total_ms']['p50']} / p95 {s['total_ms']['p95']} мс, ${s['usd_per_answer']:.5f} за ответ, "
-            f"с чужими номерами {s['answers_with_invalid_refs']}, отказов {s['refusals']}"
+            f"с чужими номерами {s['answers_with_invalid_refs']}, отказов {s['refusals']}, фолбэков {s['fallbacks']}"
+            + "".join(f", {k} {v['passed']}/{v['of']}" for k, v in s["checks"].items())
         )
-    print(
-        f"report: {out.relative_to(ROOT.parent)}\nна оценку вслепую: {review.relative_to(ROOT.parent)}"
-        f"\nключ (не открывать до оценки): {key_path.relative_to(ROOT.parent)}"
-    )
+    print(f"report: {out.relative_to(ROOT.parent)}")
+    if len(args.models) == 2:
+        review, key_path = write_blind_review(results, args.models, stamp)
+        print(f"на оценку вслепую: {review.relative_to(ROOT.parent)}\nключ: {key_path.relative_to(ROOT.parent)}")
+
+
+def run_answer_judge(args, cfg, settings) -> None:
+    """Перепроверка судьёй готового отчёта answer — без повторной генерации ответов. Пишет новый отчёт."""
+    report = json.loads(args.report.read_text(encoding="utf-8"))
+    all_cases = {
+        c["id"]: c for c in (json.loads(ln) for ln in (ROOT / "cases.jsonl").open(encoding="utf-8") if ln.strip())
+    }
+    totals: dict[str, dict[str, list[bool]]] = {}
+    for row in report["results"]:
+        for m, a in row["answers"].items():
+            a["checks"] = {}
+            for name, check in answer_checks(row, all_cases[row["id"]]).items():
+                v = judge(check, row["query"], row, a["text"], cfg, settings)
+                a["checks"][name] = {"verdict": v.verdict, "reason": v.reason}
+                totals.setdefault(m, {}).setdefault(name, []).append(v.verdict)
+                print(f"{row['id']} {m}: {name} {v.verdict}")  # без причин: они цитируют ответ
+    for m, checks in totals.items():
+        report["summary"][m]["checks"] = {k: {"passed": sum(v), "of": len(v)} for k, v in checks.items()}
+    report["rejudged_from"] = str(args.report)
+    stamp = f"{datetime.now(UTC):%Y%m%dT%H%M%SZ}"
+    out = args.report.with_name(f"{stamp}_{args.report.name.split('_', 1)[1].removesuffix('.json')}_rejudged.json")
+    out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    for m, checks in totals.items():
+        print(f"answer/{m}: " + ", ".join(f"{k} {sum(v)}/{len(v)}" for k, v in checks.items()))
+    print(f"report: {out}")
 
 
 def run_answer_review(args) -> None:
@@ -677,11 +801,15 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="config/demo.yaml")
     ap.add_argument(
-        "--layer", default="parse", choices=["parse", "search", "relax", "answer", "answer-review", "answer-reveal"]
+        "--layer",
+        default="parse",
+        choices=["parse", "search", "relax", "answer", "answer-judge", "answer-review", "answer-reveal"],
     )
     ap.add_argument("--report", type=Path, help="answer-review: отчёт answer, из которого собрать слепой файл")
     ap.add_argument("--review", type=Path, help="answer-reveal: заполненный файл оценки")
-    ap.add_argument("--cases", nargs="+", default=ANSWER_CASES, help="answer: id кейсов")
+    ap.add_argument("--cases", nargs="+", default=ANSWER_CASES, help="answer: id кейсов или split:<набор>")
+    ap.add_argument("--judge", action="store_true", help="answer: проверка судьёй (ослабление, «подходящих нет»)")
+    ap.add_argument("--tag", help="answer: метка в имени отчёта")
     ap.add_argument("--models", nargs="+", default=["claude-sonnet-5-5", "claude-haiku-5-5"], help="answer: модели")
     ap.add_argument(
         "--modes",
@@ -716,6 +844,8 @@ def main() -> None:
         run_relax(args, cfg, settings)
     elif args.layer == "answer":
         run_answer(args, cfg, settings)
+    elif args.layer == "answer-judge":
+        run_answer_judge(args, cfg, settings)
     elif args.layer == "answer-review":
         run_answer_review(args)
     elif args.layer == "answer-reveal":

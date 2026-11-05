@@ -23,6 +23,7 @@ models:
   generator: claude-sonnet-5-5   # синтетика
   parser: claude-haiku-5-5       # шаг 2
   labeler: claude-opus-5-5       # разметка relevant для смысловых кейсов
+  judge: claude-haiku-5-5        # судья в evals ответа: узкие проверки да/нет
 
 embeddings:
   provider: voyage
