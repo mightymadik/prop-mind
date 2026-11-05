@@ -1,0 +1,47 @@
+# Прод-демо на одной VM: Postgres + pgvector, API, Caddy с автоматическим HTTPS.
+#   cd deploy/oracle && docker compose up -d --build
+# Секреты — в deploy/oracle/.env (не в git): ANTHROPIC_API_KEY, VOYAGE_API_KEY, POSTGRES_PASSWORD, DOMAIN.
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: prop
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задай в .env}
+      POSTGRES_DB: prop
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../../db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    # порт наружу не открываем: база доступна только API внутри сети compose
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prop -d prop"]
+      interval: 5s
+      retries: 30
+
+  api:
+    build: ../..
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://prop:${POSTGRES_PASSWORD}@db:5432/prop
+      CONFIG_PATH: config/demo.yaml
+      FORWARDED_ALLOW_IPS: "*"   # API доступен только из сети compose, перед ним — Caddy
+    expose: ["8000"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      DOMAIN: ${DOMAIN:?задай в .env, например 203-0-113-7.sslip.io}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on: [api]
+
+volumes:
+  pgdata:
+  caddy_data:

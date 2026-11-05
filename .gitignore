@@ -4,3 +4,5 @@ __pycache__/
 *.pyc
 .pytest_cache/
 config/prod.yaml
+deploy/**/.env
+deploy/cloudrun/env.yaml
