@@ -35,6 +35,21 @@ rerank:
   model: rerank-2.5              # явно многоязычный; на dev = rerank-3 по качеству, не медленнее (decisions.md)
   candidates: 50                 # топ гибрида на переранжирование; ~6K токенов на запрос
 
+answer:
+  model: claude-sonnet-5-5       # выбор — по сравнению Sonnet/Haiku (decisions.md)
+  max_tokens: 1024
+  top_k: 10
+  models:
+    claude-sonnet-5-5:
+      thinking: {type: between_tools}   # у Sonnet 5.5 так выключаются рассуждения; disabled → 400
+      fallbacks: default                # серверный фолбэк при отказе (beta server-side-fallback-2026-07-01)
+    claude-haiku-5-5:
+      thinking: {type: disabled}        # допустимо при effort ≤ high (по умолчанию medium)
+
+pricing:                         # $ за 1 млн токенов (прайс Anthropic)
+  claude-sonnet-5-5: {input: 2.0, output: 10.0}
+  claude-haiku-5-5: {input: 0.10, output: 0.50}   # до 100K токенов в промпте
+
 limits:
   daily_budget_usd: 2
   requests_per_minute_per_ip: 10

@@ -30,6 +30,23 @@ class RerankConfig(BaseModel):
     candidates: int = 50  # сколько кандидатов гибрида переранжировать
 
 
+class AnswerModelConfig(BaseModel):
+    thinking: dict  # как выключить рассуждения у этой модели (у Sonnet 5.5 и Haiku 5.5 по-разному)
+    fallbacks: str | None = None  # серверный фолбэк при отказе модели; "default" — по рекомендации Anthropic
+
+
+class AnswerConfig(BaseModel):
+    model: str  # модель ответа в продукте
+    max_tokens: int = 1024
+    top_k: int = 10  # сколько объектов передаём модели
+    models: dict[str, AnswerModelConfig]  # настройки для каждой модели, которую можно выбрать
+
+
+class Price(BaseModel):
+    input: float  # $ за 1 млн токенов
+    output: float
+
+
 class AppConfig(BaseModel):
     """Несекретные настройки из config/*.yaml."""
 
@@ -42,6 +59,8 @@ class AppConfig(BaseModel):
     models: dict[str, str]
     embeddings: EmbeddingsConfig
     rerank: RerankConfig
+    answer: AnswerConfig
+    pricing: dict[str, Price]  # модель → цена за 1 млн токенов
     limits: dict[str, float]
 
 
