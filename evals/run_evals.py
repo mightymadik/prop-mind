@@ -27,6 +27,7 @@ from app.llm.parser import PROMPT_FILE, parse_query
 from app.schemas import SearchFilters
 from app.search.embeddings import embed, to_pgvector
 from app.search.hybrid import query_text, search, where_from_filters
+from app.search.rerank import rerank_ids
 
 ROOT = Path(__file__).resolve().parent
 K = 10
@@ -188,6 +189,54 @@ def embed_queries(texts: list[str], cfg, settings, cache_path: Path | None = Non
     return [to_pgvector(cache[key(t)]) for t in texts]
 
 
+RERANK_CACHE = ROOT / "rerank_cache.jsonl"
+BASE_MODES = ("vector", "hybrid")
+
+
+def search_mode(value: str) -> str:
+    """vector | hybrid | rerank:<модель> (гибрид, затем реранкер этой модели)."""
+    if value in BASE_MODES or (value.startswith("rerank:") and len(value) > len("rerank:")):
+        return value
+    raise argparse.ArgumentTypeError(f"режим {value!r}: vector, hybrid или rerank:<модель>")
+
+
+class RerankCache:
+    """Кэш порядка от реранкера: ключ — модель + запрос + кандидаты. Прогоны воспроизводимы и бесплатны."""
+
+    def __init__(self, path: Path):
+        self.path = path
+        self.data: dict[str, list[str]] = {}
+        if path.exists():
+            for line in path.open(encoding="utf-8"):
+                if line.strip():
+                    r = json.loads(line)
+                    self.data[self.key(r["model"], r["query"], r["candidates"])] = r["order"]
+
+    @staticmethod
+    def key(model: str, query: str, candidates: list[str]) -> str:
+        return json.dumps([model, query, candidates], ensure_ascii=False)
+
+    def get_or_compute(self, model: str, query: str, candidates: list[str], compute) -> list[str]:
+        k = self.key(model, query, candidates)
+        if k not in self.data:
+            self.data[k] = compute()
+            with self.path.open("a", encoding="utf-8") as f:
+                row = {"model": model, "query": query, "candidates": candidates, "order": self.data[k]}
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        return self.data[k]
+
+
+def run_search_mode(conn, mode: str, f: SearchFilters, vec: str, text: str, cfg, settings, cache: RerankCache):
+    if not mode.startswith("rerank:"):
+        return search(conn, f, vec, text, mode)
+    ranked, relaxed = search(conn, f, vec, text, "hybrid")
+    model, n = mode.removeprefix("rerank:"), cfg.rerank.candidates
+    head = cache.get_or_compute(
+        model, text, ranked[:n], lambda: rerank_ids(conn, ranked[:n], text, cfg.rerank, settings.voyage_api_key, model)
+    )
+    return head + ranked[n:], relaxed
+
+
 def relaxed_filters(f: SearchFilters, relaxed: list[str]) -> SearchFilters:
     return f.model_copy(update={k: [] if k == "features" else None for k in relaxed})
 
@@ -317,6 +366,7 @@ def run_search(args, cfg, settings) -> None:
     vec_of = dict(zip(uniq, embed_queries(uniq, cfg, settings), strict=True))
 
     by_mode: dict[str, list[dict]] = {f"{src}/{m}": [] for src in sources for m in args.modes}
+    rerank_cache = RerankCache(RERANK_CACHE)
     with connect() as conn:
         for c in cases:
             g_where, g_params = where_from_filters(gold[c["id"]])
@@ -334,7 +384,9 @@ def run_search(args, cfg, settings) -> None:
                         ranked, relaxed = [], []
                     else:
                         text = texts[(src, c["id"])]
-                        ranked, relaxed = search(conn, f, vec_of[text], text, mode)
+                        ranked, relaxed = run_search_mode(
+                            conn, mode, f, vec_of[text], text, cfg, settings, rerank_cache
+                        )
                     latency = int((time.perf_counter() - t) * 1000)
                     top = ranked[:K]
                     passes_gold = {
@@ -432,7 +484,11 @@ def main() -> None:
     ap.add_argument("--config", default="config/demo.yaml")
     ap.add_argument("--layer", default="parse", choices=["parse", "search", "relax"])
     ap.add_argument(
-        "--modes", nargs="+", default=["vector", "hybrid"], choices=["vector", "hybrid"], help="search: методы"
+        "--modes",
+        nargs="+",
+        type=search_mode,
+        default=["vector", "hybrid"],
+        help="search: vector, hybrid, rerank:<модель> (например rerank:rerank-3)",
     )
     ap.add_argument("--verbose", action="store_true", help="search: разбивка по тегам")
     ap.add_argument(

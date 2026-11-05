@@ -180,3 +180,29 @@ def test_parsed_from_report_restores_filters_and_errors():
     got = parsed_from_report(report)
     assert got["d01"] == SearchFilters(city="Астана", rooms=[2], semantic_query="тихо")
     assert got["d02"] == "RuntimeError: no structured output"
+
+
+def test_search_mode_validation():
+    import argparse
+
+    import pytest
+
+    from evals.run_evals import search_mode
+
+    assert search_mode("hybrid") == "hybrid" and search_mode("rerank:rerank-3") == "rerank:rerank-3"
+    for bad in ("bm25", "rerank:", "rerank"):
+        with pytest.raises(argparse.ArgumentTypeError):
+            search_mode(bad)
+
+
+def test_rerank_cache_computes_once_and_persists(tmp_path):
+    from evals.run_evals import RerankCache
+
+    calls = []
+    path = tmp_path / "cache.jsonl"
+    c = RerankCache(path)
+    assert c.get_or_compute("m", "q", ["a", "b"], lambda: calls.append(1) or ["b", "a"]) == ["b", "a"]
+    assert RerankCache(path).get_or_compute("m", "q", ["a", "b"], lambda: calls.append(1) or []) == ["b", "a"]
+    assert calls == [1]  # второй раз — из файла
+    RerankCache(path).get_or_compute("m2", "q", ["a", "b"], lambda: calls.append(1) or ["a", "b"])
+    assert calls == [1, 1]  # другая модель — другой ключ
