@@ -32,7 +32,7 @@ embeddings:
 
 rerank:
   provider: voyage
-  model: rerank-3                # rerank-2.5 — многоязычный по документации; сравниваем на evals
+  model: rerank-2.5              # явно многоязычный; на dev = rerank-3 по качеству, не медленнее (decisions.md)
   candidates: 50                 # топ гибрида на переранжирование; ~6K токенов на запрос
 
 limits:
