@@ -1,0 +1,16 @@
+{
+  "rerank-3": {
+    "n": 8,
+    "p50_ms": 628,
+    "p95_ms": 950,
+    "tokens_mean": 6316,
+    "usd_per_query": 0.000316
+  },
+  "rerank-2.5": {
+    "n": 8,
+    "p50_ms": 562,
+    "p95_ms": 708,
+    "tokens_mean": 6316,
+    "usd_per_query": 0.000316
+  }
+}
