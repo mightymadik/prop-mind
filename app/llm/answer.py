@@ -43,7 +43,8 @@ def build_user_message(
     shown = filters.model_dump(exclude_defaults=True, exclude={"semantic_query", "needs_clarification"})
     lines = [
         f"Запрос: {query}",
-        f"Фильтры: {shown or 'нет'}; смысловая часть: {filters.semantic_query or 'нет'}",
+        f"Условия запроса (фильтры, уже применены поиском): {shown or 'нет'}",
+        f"Смысловая часть (подтверждать описанием): {filters.semantic_query or 'нет'}",
         "Ослаблено поиском: " + (", ".join(RELAX_TEXT.get(r, r) for r in relaxed) if relaxed else "ничего"),
         "",
         "Кандидаты:" if rows else "Кандидатов нет: поиск ничего не нашёл.",

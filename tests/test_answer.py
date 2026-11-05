@@ -25,7 +25,8 @@ def test_user_message_numbers_candidates_and_states_relaxation():
     msg = answer.build_user_message("сниму двушку", f, ["features", "conditions"], ROWS, CFG.features)
     assert "[1] 230 000 ₸" in msg and "[2] 450 000 ₸" in msg and "syn-" not in msg  # наружу только номера
     assert "Ослаблено поиском: признаки, состояние" in msg and "с мебелью" in msg
-    assert "смысловая часть: спокойные соседи" in msg
+    assert "Смысловая часть (подтверждать описанием): спокойные соседи" in msg
+    assert "Условия запроса (фильтры, уже применены поиском): {'city': 'Алматы'" in msg
     empty = answer.build_user_message("q", f, [], [], CFG.features)
     assert "Ослаблено поиском: ничего" in empty and "Кандидатов нет" in empty
 
