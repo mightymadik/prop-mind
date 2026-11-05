@@ -47,6 +47,16 @@ class Price(BaseModel):
     output: float
 
 
+class LimitsConfig(BaseModel):
+    daily_budget_usd: float
+    requests_per_minute_per_ip: int
+    timezone: str = "Asia/Almaty"
+
+
+class SiteConfig(BaseModel):
+    origins: list[str] = []
+
+
 class AppConfig(BaseModel):
     """Несекретные настройки из config/*.yaml."""
 
@@ -61,7 +71,8 @@ class AppConfig(BaseModel):
     rerank: RerankConfig
     answer: AnswerConfig
     pricing: dict[str, Price]  # модель → цена за 1 млн токенов
-    limits: dict[str, float]
+    limits: LimitsConfig
+    sites: dict[str, SiteConfig]
 
 
 def load_config(path: str | Path) -> AppConfig:

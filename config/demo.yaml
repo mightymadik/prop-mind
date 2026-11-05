@@ -55,5 +55,10 @@ pricing:                         # $ за 1 млн токенов (прайс An
   rerank-3: {input: 0.05, output: 0}
 
 limits:
-  daily_budget_usd: 2
+  daily_budget_usd: 2            # сумма cost_usd в query_log за сутки; дальше — «лимит на сегодня исчерпан»
   requests_per_minute_per_ip: 10
+  timezone: Asia/Almaty          # границы суток для бюджета
+
+sites:                           # публичные site-key виджета; собственный домен ('self') разрешён всегда
+  pub_demo:
+    origins: []                  # сайты, которым можно встраивать чат в iframe (frame-ancestors)
