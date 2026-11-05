@@ -5,6 +5,8 @@ from pathlib import Path
 import anthropic
 from pydantic import BaseModel
 
+from app.costs import record
+
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 
 
@@ -38,6 +40,7 @@ def call_structured[T: BaseModel](
         messages=[{"role": "user", "content": user}],
     ) as stream:
         msg = stream.get_final_message()
+    record(model, msg.usage.input_tokens, msg.usage.output_tokens)
     # обрезанный JSON или текст отказа SDK сам отвергает ValidationError; тут — ответ без текста
     if msg.parsed_output is None:
         raise RuntimeError(f"no structured output: stop_reason={msg.stop_reason}")

@@ -4,6 +4,7 @@ from typing import Literal
 import httpx
 
 from app.config import EmbeddingsConfig
+from app.costs import record
 
 VOYAGE_URL = "https://api.voyageai.com/v1/embeddings"
 RETRIES = 5
@@ -30,7 +31,9 @@ def embed(
     if cfg.provider != "voyage":
         raise ValueError(f"unknown embeddings provider: {cfg.provider}")
     payload = {"input": texts, "model": cfg.model, "input_type": input_type, "output_dimension": cfg.dim}
-    data = sorted(voyage_post(VOYAGE_URL, payload, api_key)["data"], key=lambda d: d["index"])
+    out = voyage_post(VOYAGE_URL, payload, api_key)
+    record(cfg.model, out.get("usage", {}).get("total_tokens", 0))
+    data = sorted(out["data"], key=lambda d: d["index"])
     return [d["embedding"] for d in data]
 
 

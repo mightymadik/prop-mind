@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 import anthropic
 
 from app.config import AppConfig
+from app.costs import record
 from app.llm.client import load_prompt
 from app.schemas import SearchFilters
 
@@ -114,6 +115,9 @@ def generate_answer(
         msg = stream.get_final_message()
     total = int((time.perf_counter() - t0) * 1000)
 
+    # при фолбэке платим по цене модели, которая ответила, если она есть в прайсе
+    served = msg.model if msg.model in cfg.pricing else model
+    record(served, msg.usage.input_tokens, msg.usage.output_tokens)
     raw = "".join(b.text for b in msg.content if b.type == "text")
     # фолбэк виден как блок типа fallback в ответе и как смена модели в msg.model
     fallback = any(b.type == "fallback" for b in msg.content) or (msg.model or model) != model
