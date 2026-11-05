@@ -11,6 +11,8 @@ from app.db import connect
 from app.llm.answer import generate_answer
 from app.pii import mask_pii
 from app.pipeline import Retrieval, retrieve
+from app.schemas import SearchFilters
+from app.search.text import CONDITION_TEXT
 
 log_ = logging.getLogger(__name__)
 Event = Callable[[str, dict], None]
@@ -24,10 +26,39 @@ VALUES (%(query)s, %(filters)s, %(relaxed)s, %(clarification)s, %(result_source_
 """
 
 
-def card(row: tuple) -> dict:
+def card(row: tuple, cfg: AppConfig | None = None) -> dict:
     d = dict(zip(CARD_FIELDS, row, strict=True))
     d["area_m2"] = float(d["area_m2"]) if d["area_m2"] is not None else None
+    if cfg:  # подписи для интерфейса — из конфига, чтобы не дублировать словари в JS
+        d["condition_label"] = CONDITION_TEXT.get(d["condition"]) if d["condition"] else None
+        d["feature_labels"] = [cfg.features.get(f, f) for f in d["features"]]
     return d
+
+
+def money(v: int) -> str:
+    return f"{v / 1e6:g} млн" if v >= 1_000_000 else f"{v // 1000} тыс"
+
+
+def filter_chips(f: SearchFilters, cfg: AppConfig) -> list[str]:
+    """Распознанные условия короткими подписями — пользователь видит их, пока идёт поиск."""
+    chips = [f.city] if f.city else []
+    chips.append("аренда" if f.deal_type == "rent" else "покупка")
+    if f.rooms:
+        chips.append("/".join(map(str, f.rooms)) + " комн.")
+    if f.price_min_kzt is not None and f.price_max_kzt is not None:
+        chips.append(f"{money(f.price_min_kzt)} – {money(f.price_max_kzt)}")
+    elif f.price_max_kzt is not None:
+        chips.append(f"до {money(f.price_max_kzt)}")
+    elif f.price_min_kzt is not None:
+        chips.append(f"от {money(f.price_min_kzt)}")
+    if f.area_min_m2:
+        chips.append(f"от {f.area_min_m2:g} м²")
+    chips += [f"{d} р-н" for d in f.districts or []]
+    chips += [CONDITION_TEXT.get(c, c) for c in f.conditions or []]
+    chips += [cfg.features.get(x, x) for x in f.features]
+    if f.semantic_query:
+        chips.append(f"«{f.semantic_query}»")
+    return chips
 
 
 def run_search(query: str, cfg: AppConfig, settings: Settings, on_event: Event | None = None) -> dict:
@@ -39,18 +70,30 @@ def run_search(query: str, cfg: AppConfig, settings: Settings, on_event: Event |
     answer = None
     with track() as ledger:
         try:
+
+            def on_filters(f: SearchFilters) -> None:
+                payload["filters"] = f.model_dump(exclude_defaults=True)
+                payload["chips"] = filter_chips(f, cfg)
+                emit("filters", {"filters": payload["filters"], "chips": payload["chips"]})
+
             with connect() as conn:
-                r = retrieve(conn, query, cfg, settings)
-            payload["filters"] = r.filters.model_dump(exclude_defaults=True)
-            emit("filters", {"filters": payload["filters"]})
+                r = retrieve(
+                    conn,
+                    query,
+                    cfg,
+                    settings,
+                    on_stage=lambda st: emit("status", {"stage": st}),
+                    on_filters=on_filters,
+                )
             if r.clarification:
                 payload["clarification"] = r.clarification
                 emit("clarification", {"text": r.clarification})
             else:
                 payload["relaxed"] = r.relaxed
-                payload["results"] = [card(row) for row in r.rows]
+                payload["results"] = [card(row, cfg) for row in r.rows]
                 # номер [n] в тексте ответа = n-й объект этого списка
                 emit("results", {"relaxed": r.relaxed, "results": payload["results"]})
+                emit("status", {"stage": "answer"})
                 answer = generate_answer(
                     query,
                     r.filters,

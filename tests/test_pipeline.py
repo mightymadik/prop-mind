@@ -29,3 +29,13 @@ def test_retrieve_reranks_and_cuts_to_top_k(monkeypatch):
     assert seen == {"text": "тихий двор", "n": 30}  # реранк по смысловой части
     assert [x[0] for x in r.rows] == list(reversed(ids))[: CFG.answer.top_k]
     assert r.relaxed == ["features"] and {"embed", "search", "rerank"} <= set(r.timings_ms)
+
+
+def test_filters_reported_before_search(monkeypatch):
+    order = []
+    monkeypatch.setattr(pipeline, "embed", lambda *a, **k: order.append("embed") or [[0.0]])
+    monkeypatch.setattr(pipeline, "search", lambda *a: order.append("search") or ([], []))
+    monkeypatch.setattr(pipeline, "fetch_rows", lambda conn, ids: [])
+    f = SearchFilters(city="Алматы")
+    pipeline.retrieve(None, "q", CFG, Settings(), filters=f, on_filters=lambda x: order.append("filters"))
+    assert order == ["filters", "embed", "search"]

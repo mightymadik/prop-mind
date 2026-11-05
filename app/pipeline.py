@@ -38,22 +38,29 @@ def retrieve(
     filters: SearchFilters | None = None,
     embed_fn: Callable[[str], str] | None = None,
     rerank_fn: Callable[[object, list[str], str], list[str]] | None = None,
+    on_stage: Callable[[str], None] | None = None,
+    on_filters: Callable[[SearchFilters], None] | None = None,
 ) -> Retrieval:
     """filters, embed_fn (текст → pgvector) и rerank_fn можно подменить — evals с зафиксированным разбором
     и кэшами; по умолчанию — parse_query и живые вызовы Voyage, как в продукте."""
     timings: dict[str, int] = {}
+    stage = on_stage or (lambda name: None)  # для статуса в интерфейсе: parse → search → rerank
 
     def lap(name: str, t: float) -> None:
         timings[name] = int((time.perf_counter() - t) * 1000)
 
     t = time.perf_counter()
     if filters is None:
+        stage("parse")
         filters = parse_query(query, cfg, settings)
         lap("parse", t)
+    if on_filters:  # интерфейс показывает распознанные условия сразу после разбора, до поиска
+        on_filters(filters)
     if filters.needs_clarification:
         return Retrieval(query, filters, clarification=filters.needs_clarification, timings_ms=timings)
 
     text = query_text(filters, query)
+    stage("search")
     t = time.perf_counter()
     if embed_fn:
         qvec = embed_fn(text)
@@ -65,6 +72,7 @@ def retrieve(
     lap("search", t)
     t = time.perf_counter()
     if ranked:
+        stage("rerank")
         if rerank_fn:
             ranked = rerank_fn(conn, ranked, text)
         else:
