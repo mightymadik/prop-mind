@@ -220,3 +220,67 @@ def test_search_variant_validation():
     for bad in ("vector", "oracle/vector", "parsed/bm25"):
         with pytest.raises(argparse.ArgumentTypeError):
             search_variant(bad)
+
+
+def _answer_rows(n: int = 8) -> list[dict]:
+    rows = []
+    for i in range(n):
+        rows.append(
+            {
+                "id": f"d{i:02d}",
+                "query": f"запрос {i}",
+                "filters": {},
+                "relaxed": [],
+                "clarification": None,
+                "ids": ["syn-1"],
+                "answers": {
+                    "m-sonnet": {"text": f"ответ S{i}", "ttft_ms": 1500, "cost_usd": 0.009},
+                    "m-haiku": {"text": f"ответ H{i}", "ttft_ms": 800, "cost_usd": 0.0004},
+                },
+            }
+        )
+    return rows
+
+
+def test_blind_review_hides_models_and_metrics_and_shuffles():
+    from evals.run_evals import render_blind_review
+
+    md, key = render_blind_review(_answer_rows(), ["m-sonnet", "m-haiku"], seed="s1")
+    assert "m-sonnet" not in md and "m-haiku" not in md
+    assert "1500" not in md and "0.009" not in md and "мс" not in md  # метрики выдали бы модель
+    assert len({k["A"] for k in key.values()}) == 2  # в разных кейсах A — разные модели
+    assert render_blind_review(_answer_rows(), ["m-sonnet", "m-haiku"], seed="s1")[1] == key  # воспроизводимо
+
+
+def test_blind_review_key_matches_texts():
+    from evals.run_evals import render_blind_review
+
+    md, key = render_blind_review(_answer_rows(3), ["m-sonnet", "m-haiku"], seed="x")
+    for cid, k in key.items():
+        sec = md.split(f"## {cid}:")[1]
+        a_text = sec.split("### Ответ A")[1].split("### Ответ B")[0]
+        expected = "S" if k["A"] == "m-sonnet" else "H"
+        assert f"ответ {expected}{int(cid[1:])}" in a_text
+
+
+def test_grades_parse_and_reveal():
+    from evals.run_evals import parse_grades, reveal
+
+    text = (
+        "## d01: q\n\nОценка A (1–5): 4\nОценка B (1–5): 2\n"
+        "## d02: q\nОценка A (1–5): 3\nОценка B (1–5): 3\n"
+        "## d03: q\nОценка A (1–5): \n"  # не оценён — пропускается
+    )
+    grades = parse_grades(text)
+    assert grades == {"d01": {"A": 4, "B": 2}, "d02": {"A": 3, "B": 3}}
+    key = {"d01": {"A": "s", "B": "h"}, "d02": {"A": "h", "B": "s"}}
+    r = reveal(grades, key)
+    assert r["s"]["scores"] == {"d01": 4, "d02": 3} and r["s"]["mean"] == 3.5 and r["s"]["wins"] == 1
+    assert r["h"]["scores"] == {"d01": 2, "d02": 3} and r["h"]["wins"] == 0
+
+
+def test_grades_accept_any_dash():
+    from evals.run_evals import parse_grades
+
+    text = "## d01: q\nОценка A (1-5): 5\nОценка B (1—5): 3 \n"
+    assert parse_grades(text) == {"d01": {"A": 5, "B": 3}}

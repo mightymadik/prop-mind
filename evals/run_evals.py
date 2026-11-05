@@ -13,6 +13,8 @@ search — поиск на эталонных expected_filters против rele
 import argparse
 import hashlib
 import json
+import random
+import re
 import statistics
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -22,8 +24,10 @@ from typing import Any
 
 from app.config import get_settings, load_config
 from app.db import connect
+from app.llm.answer import cost_usd, generate_answer
 from app.llm.client import PROMPTS_DIR
 from app.llm.parser import PROMPT_FILE, parse_query
+from app.pipeline import retrieve
 from app.schemas import SearchFilters
 from app.search.embeddings import embed, to_pgvector
 from app.search.hybrid import query_text, search, where_from_filters
@@ -359,7 +363,9 @@ def run_search(args, cfg, settings) -> None:
         sources["gold"] = dict(gold)
     if "parsed" in args.filters:
         if args.parsed_from:
-            frozen = parsed_from_report(json.loads(args.parsed_from.read_text(encoding="utf-8")))
+            frozen = {}
+            for path in args.parsed_from:
+                frozen |= parsed_from_report(json.loads(path.read_text(encoding="utf-8")))
             missing = [c["id"] for c in cases if c["id"] not in frozen]
             if missing:
                 raise SystemExit(f"в {args.parsed_from} нет разбора для {missing}")
@@ -440,7 +446,7 @@ def run_search(args, cfg, settings) -> None:
         "layer": "search",
         "modes": args.modes,
         "filters": args.filters,
-        "parsed_from": str(args.parsed_from) if args.parsed_from else None,
+        "parsed_from": [str(p) for p in args.parsed_from] if args.parsed_from else None,
         "split": args.split,
         "date": now.isoformat(timespec="seconds"),
         "config": args.config,
@@ -493,10 +499,190 @@ def run_search(args, cfg, settings) -> None:
     print(f"report: {out.relative_to(ROOT.parent)}")
 
 
+ANSWER_CASES = ["d15", "d17", "d22", "d27", "d29", "d30", "r01", "d16", "h06", "h07"]
+NO_MATCH_CASES = {"d16", "h06", "h07"}  # подходящих по смыслу нет: ответ должен честно это сказать
+
+
+def pct(values: list[int], q: float) -> int:
+    v = sorted(values)
+    return v[min(len(v) - 1, int(len(v) * q))] if q < 0.5 or len(v) > 1 else v[0]
+
+
+GRADE = re.compile(r"^Оценка ([AB]) \(1\s*[-–—]\s*5\): *([1-5])\s*$")  # редактор может заменить «–» на «-»
+
+
+def render_blind_review(rows: list[dict], models: list[str], seed: str) -> tuple[str, dict[str, dict[str, str]]]:
+    """Файл для оценки вслепую: ответы двух моделей подписаны A/B в случайном порядке для каждого кейса,
+    без названий моделей и без метрик (задержка и цена выдали бы модель). Соответствие — во втором значении."""
+    if len(models) != 2:
+        raise SystemExit("оценка вслепую — ровно для двух моделей")
+    out = [
+        "# Оценка ответов вслепую",
+        "",
+        "Ответы двух моделей подписаны A и B; в каждом кейсе порядок свой, случайный. Какая модель где —",
+        "в файле .key.json рядом; не открывай его до конца оценки.",
+        "Оцени каждый ответ от 1 до 5: соответствие запросу, честность расхождений, нет ли выдумок.",
+        "Кейсы d16, h06, h07 — «подходящих по смыслу нет»: ответ должен прямо это сказать и предложить,",
+        "что ослабить. r01 — фильтры ослаблялись: ответ должен назвать, что снято.",
+        "Впиши цифру после двоеточия в строках «Оценка A/B»; потом: run_evals.py --layer answer-reveal.",
+    ]
+    key: dict[str, dict[str, str]] = {}
+    for r in rows:
+        out += ["", f"## {r['id']}: {r['query']}", ""]
+        out.append(f"Фильтры: {r['filters']}; ослаблено: {r['relaxed'] or 'ничего'}")
+        out.append("Кандидаты: " + (", ".join(f"[{i + 1}] {sid}" for i, sid in enumerate(r["ids"])) or "нет"))
+        if r.get("clarification") or not all(m in r["answers"] for m in models):
+            out.append(f"Ответов нет: {r.get('clarification') or 'не сгенерированы'}")
+            continue
+        order = list(models)
+        random.Random(f"{seed}:{r['id']}").shuffle(order)
+        key[r["id"]] = {"A": order[0], "B": order[1]}
+        for label, m in zip("AB", order, strict=True):
+            out += ["", f"### Ответ {label}", "", r["answers"][m]["text"], "", f"Оценка {label} (1–5): "]
+    return "\n".join(out) + "\n", key
+
+
+def parse_grades(text: str) -> dict[str, dict[str, int]]:
+    """Файл оценки → {кейс: {A: оценка, B: оценка}}; кейсы без оценок пропускаются."""
+    grades: dict[str, dict[str, int]] = {}
+    case = None
+    for line in text.splitlines():
+        if line.startswith("## "):
+            case = line[3:].split(":", 1)[0].strip()
+        elif case and (m := GRADE.match(line.strip())):
+            grades.setdefault(case, {})[m.group(1)] = int(m.group(2))
+    return grades
+
+
+def reveal(grades: dict[str, dict[str, int]], key: dict[str, dict[str, str]]) -> dict[str, dict]:
+    """Оценки по моделям: среднее, по кейсам, сколько раз модель оценена выше."""
+    per_model: dict[str, dict] = {}
+    for case, g in grades.items():
+        if case not in key or set(g) != {"A", "B"}:
+            continue
+        for label, score in g.items():
+            m = per_model.setdefault(key[case][label], {"scores": {}, "wins": 0})
+            m["scores"][case] = score
+        a, b = key[case]["A"], key[case]["B"]
+        if g["A"] != g["B"]:
+            per_model[a if g["A"] > g["B"] else b]["wins"] += 1
+    for m in per_model.values():
+        m["mean"] = round(statistics.fmean(m["scores"].values()), 2)
+    return per_model
+
+
+def write_blind_review(results: list[dict], models: list[str], stamp: str) -> tuple[Path, Path]:
+    md, key = render_blind_review(results, models, seed=stamp)
+    review = ROOT / f"answer_review_{stamp}.md"
+    key_path = ROOT / f"answer_review_{stamp}.key.json"
+    review.write_text(md, encoding="utf-8")
+    key_path.write_text(json.dumps(key, ensure_ascii=False, indent=2), encoding="utf-8")
+    return review, key_path
+
+
+def run_answer(args, cfg, settings) -> None:
+    """Ответ на одинаковых выдачах для каждой модели из --models. Тексты — в файл на проверку человеку,
+    в консоль — только цифры (в наборе есть holdout-кейсы)."""
+    all_cases = {
+        c["id"]: c for c in (json.loads(ln) for ln in (ROOT / "cases.jsonl").open(encoding="utf-8") if ln.strip())
+    }
+    frozen: dict[str, SearchFilters | str] = {}
+    for path in args.parsed_from or []:
+        frozen |= parsed_from_report(json.loads(path.read_text(encoding="utf-8")))
+    results = []
+    with connect() as conn:
+        for cid in args.cases:
+            c = all_cases[cid]
+            f = frozen.get(cid)
+            r = retrieve(conn, c["query"], cfg, settings, filters=f if isinstance(f, SearchFilters) else None)
+            row = {
+                "id": cid,
+                "query": c["query"],
+                "no_match": cid in NO_MATCH_CASES,
+                "filters": r.filters.model_dump(exclude_defaults=True),
+                "relaxed": r.relaxed,
+                "clarification": r.clarification,
+                "ids": [x[0] for x in r.rows],
+                "retrieval_ms": r.timings_ms,
+                "answers": {},
+            }
+            if not r.clarification:
+                for m in args.models:
+                    a = generate_answer(c["query"], r.filters, r.relaxed, r.rows, cfg, settings.anthropic_api_key, m)
+                    row["answers"][m] = {**a.__dict__, "cost_usd": round(cost_usd(a, cfg), 6)}
+                    print(
+                        f"{cid} {m}: первый токен {a.ttft_ms} мс, всего {a.total_ms} мс, "
+                        f"токены {a.input_tokens}/{a.output_tokens}, ${cost_usd(a, cfg):.5f}, "
+                        f"чужих номеров {len(a.invalid_refs)}, stop {a.stop_reason}"
+                    )
+            results.append(row)
+
+    summary = {}
+    for m in args.models:
+        ans = [r["answers"][m] for r in results if m in r["answers"]]
+        ttft = [a["ttft_ms"] for a in ans if a["ttft_ms"] is not None]
+        total = [a["total_ms"] for a in ans]
+        summary[m] = {
+            "answers": len(ans),
+            "ttft_ms": {"p50": int(statistics.median(ttft)), "p95": pct(ttft, 0.95)},
+            "total_ms": {"p50": int(statistics.median(total)), "p95": pct(total, 0.95)},
+            "usd_per_answer": round(statistics.fmean(a["cost_usd"] for a in ans), 6),
+            "answers_with_invalid_refs": sum(bool(a["invalid_refs"]) for a in ans),
+            "refusals": sum(a["stop_reason"] == "refusal" for a in ans),
+        }
+    now = datetime.now(UTC)
+    stamp = f"{now:%Y%m%dT%H%M%SZ}"
+    report = {
+        "layer": "answer",
+        "date": now.isoformat(timespec="seconds"),
+        "models": args.models,
+        "summary": summary,
+        "results": results,
+    }
+    out = ROOT / "results" / f"{stamp}_answer_{'+'.join(args.models)}.json"
+    out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    review, key_path = write_blind_review(results, args.models, stamp)
+    for m, s in summary.items():
+        print(
+            f"answer/{m}: {s['answers']} ответов, "
+            f"первый токен p50 {s['ttft_ms']['p50']} / p95 {s['ttft_ms']['p95']} мс, "
+            f"всего p50 {s['total_ms']['p50']} / p95 {s['total_ms']['p95']} мс, ${s['usd_per_answer']:.5f} за ответ, "
+            f"с чужими номерами {s['answers_with_invalid_refs']}, отказов {s['refusals']}"
+        )
+    print(
+        f"report: {out.relative_to(ROOT.parent)}\nна оценку вслепую: {review.relative_to(ROOT.parent)}"
+        f"\nключ (не открывать до оценки): {key_path.relative_to(ROOT.parent)}"
+    )
+
+
+def run_answer_review(args) -> None:
+    """Слепой файл оценки из готового отчёта answer — без повторных вызовов моделей."""
+    report = json.loads(args.report.read_text(encoding="utf-8"))
+    stamp = args.report.name.split("_", 1)[0]
+    review, key_path = write_blind_review(report["results"], report["models"], stamp)
+    print(f"на оценку вслепую: {review.relative_to(ROOT.parent)}\nключ: {key_path.relative_to(ROOT.parent)}")
+
+
+def run_answer_reveal(args) -> None:
+    grades = parse_grades(args.review.read_text(encoding="utf-8"))
+    key = json.loads(args.review.with_suffix(".key.json").read_text(encoding="utf-8"))
+    missing = sorted(set(key) - {c for c, g in grades.items() if set(g) == {"A", "B"}})
+    if missing:
+        raise SystemExit(f"не оценены (нужны обе оценки A и B): {missing}")
+    for m, r in reveal(grades, key).items():
+        print(f"{m}: средняя {r['mean']}, оценена выше в {r['wins']} кейсах, по кейсам {r['scores']}")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="config/demo.yaml")
-    ap.add_argument("--layer", default="parse", choices=["parse", "search", "relax"])
+    ap.add_argument(
+        "--layer", default="parse", choices=["parse", "search", "relax", "answer", "answer-review", "answer-reveal"]
+    )
+    ap.add_argument("--report", type=Path, help="answer-review: отчёт answer, из которого собрать слепой файл")
+    ap.add_argument("--review", type=Path, help="answer-reveal: заполненный файл оценки")
+    ap.add_argument("--cases", nargs="+", default=ANSWER_CASES, help="answer: id кейсов")
+    ap.add_argument("--models", nargs="+", default=["claude-sonnet-5-5", "claude-haiku-5-5"], help="answer: модели")
     ap.add_argument(
         "--modes",
         nargs="+",
@@ -508,7 +694,9 @@ def main() -> None:
     ap.add_argument(
         "--filters", nargs="+", default=["gold"], choices=["gold", "parsed"], help="search: источник фильтров"
     )
-    ap.add_argument("--parsed-from", type=Path, help="search: взять фильтры от парсера из этого отчёта")
+    ap.add_argument(
+        "--parsed-from", type=Path, nargs="+", help="search/answer: взять фильтры от парсера из этих отчётов"
+    )
     ap.add_argument(
         "--variants",
         nargs="+",
@@ -526,6 +714,12 @@ def main() -> None:
         run_search(args, cfg, settings)
     elif args.layer == "relax":
         run_relax(args, cfg, settings)
+    elif args.layer == "answer":
+        run_answer(args, cfg, settings)
+    elif args.layer == "answer-review":
+        run_answer_review(args)
+    elif args.layer == "answer-reveal":
+        run_answer_reveal(args)
     else:
         run_parse(args, cfg, settings)
 
