@@ -254,46 +254,103 @@ def run_relax(args, cfg, settings) -> None:
     print(f"report: {out.relative_to(ROOT.parent)}")
 
 
-def unjudged(top: list[str], case: dict) -> list[str]:
-    """Объекты топа, которых нет в оценённых: их релевантность неизвестна, метрика по ним занижена."""
+def unjudged(top: list[str], case: dict, passes_gold: set[str]) -> list[str]:
+    """Объекты топа, проходящие эталонные фильтры, но ещё не оценённые: их релевантность неизвестна.
+
+    Объект, не проходящий эталонные фильтры (ошибка парсера в сквозном прогоне), заведомо не подходит —
+    нарушено явное условие запроса, — поэтому неразмеченным не считается.
+    """
     judged = set(case.get("judged_source_ids", []))
-    return [x for x in top if x not in judged]
+    return [x for x in top if x not in judged and x in passes_gold]
+
+
+def parse_all(cases: list[dict], cfg, settings, workers: int) -> dict[str, SearchFilters | str]:
+    """id кейса → фильтры от парсера, либо текст ошибки."""
+
+    def one(c: dict) -> SearchFilters | str:
+        try:
+            return parse_query(c["query"], cfg, settings)
+        except Exception as e:  # noqa: BLE001 — упавший разбор = промах кейса, прогон продолжается
+            return f"{e.__class__.__name__}: {e}"
+
+    with ThreadPoolExecutor(workers) as pool:
+        return dict(zip((c["id"] for c in cases), pool.map(one, cases), strict=True))
 
 
 def run_search(args, cfg, settings) -> None:
-    """Все методы из --modes на одной разметке и одних эмбеддингах запросов — сравнимы только внутри прогона."""
-    cases = [c for c in load_cases(args.split) if "relevant_source_ids" in c]
-    filters = {c["id"]: SearchFilters.model_validate(c["expected_filters"]) for c in cases}
-    texts = [query_text(filters[c["id"]], c["query"]) for c in cases]
-    vecs = embed_queries(texts, cfg, settings)
+    """Все методы (--modes) × источники фильтров (--filters) в одном прогоне, на одной разметке.
 
-    by_mode: dict[str, list[dict]] = {m: [] for m in args.modes}
+    gold — эталонные expected_filters: качество поиска отдельно от разбора.
+    parsed — фильтры от parse_query, как в реальном запросе: сквозной прогон.
+    """
+    cases = [c for c in load_cases(args.split) if "relevant_source_ids" in c]
+    gold = {c["id"]: SearchFilters.model_validate(c["expected_filters"]) for c in cases}
+    sources: dict[str, dict[str, SearchFilters | str]] = {}
+    if "gold" in args.filters:
+        sources["gold"] = dict(gold)
+    if "parsed" in args.filters:
+        sources["parsed"] = parse_all(cases, cfg, settings, args.workers)
+
+    texts = {
+        (src, c["id"]): query_text(f, c["query"]) if isinstance(f := sources[src][c["id"]], SearchFilters) else ""
+        for src in sources
+        for c in cases
+    }
+    uniq = sorted({t for t in texts.values() if t})
+    vec_of = dict(zip(uniq, embed_queries(uniq, cfg, settings), strict=True))
+
+    by_mode: dict[str, list[dict]] = {f"{src}/{m}": [] for src in sources for m in args.modes}
     with connect() as conn:
-        for c, vec, text in zip(cases, vecs, texts, strict=True):
-            f = filters[c["id"]]
-            where, params = where_from_filters(f)
-            n_candidates = conn.execute(f"SELECT count(*) FROM listings WHERE {where}", params).fetchone()[0]
+        for c in cases:
+            g_where, g_params = where_from_filters(gold[c["id"]])
+            n_candidates = conn.execute(f"SELECT count(*) FROM listings WHERE {g_where}", g_params).fetchone()[0]
             relevant = c["relevant_source_ids"]
-            for mode in args.modes:
-                t = time.perf_counter()
-                ranked, relaxed = search(conn, f, vec, text, mode)
-                latency = int((time.perf_counter() - t) * 1000)
-                by_mode[mode].append(
-                    {
-                        "id": c["id"],
-                        "query": c["query"],
-                        "tags": c["tags"],
-                        "relevance": c.get("relevance"),
-                        "group": "ranking" if ranking_matters(c, n_candidates) else "other",
-                        "n_candidates": n_candidates,
-                        "n_relevant": len(relevant),
-                        "latency_ms": latency,
-                        **(search_metrics(ranked, relevant) if relevant else {"hits": 0, "recall": None, "rr": None}),
-                        "relaxed": relaxed,
-                        "unjudged_top10": unjudged(ranked[:K], c),
-                        "top10": ranked[:K],
+            for src, fs in sources.items():
+                f = fs[c["id"]]
+                parsed_ok = None
+                if src == "parsed":
+                    parsed_ok = isinstance(f, SearchFilters) and all(compare_filters(f, c).values())
+                for mode in args.modes:
+                    clarified = not isinstance(f, SearchFilters) or bool(f.needs_clarification)
+                    t = time.perf_counter()
+                    if clarified:  # парсер переспросил или упал — выдачи нет
+                        ranked, relaxed = [], []
+                    else:
+                        text = texts[(src, c["id"])]
+                        ranked, relaxed = search(conn, f, vec_of[text], text, mode)
+                    latency = int((time.perf_counter() - t) * 1000)
+                    top = ranked[:K]
+                    passes_gold = {
+                        r[0]
+                        for r in conn.execute(
+                            f"SELECT source_id FROM listings WHERE source_id = ANY(%(top)s) AND {g_where}",
+                            {**g_params, "top": top},
+                        )
                     }
-                )
+                    by_mode[f"{src}/{mode}"].append(
+                        {
+                            "id": c["id"],
+                            "query": c["query"],
+                            "tags": c["tags"],
+                            "relevance": c.get("relevance"),
+                            "group": "ranking" if ranking_matters(c, n_candidates) else "other",
+                            "n_candidates": n_candidates,
+                            "n_relevant": len(relevant),
+                            "latency_ms": latency,
+                            **(
+                                search_metrics(ranked, relevant)
+                                if relevant
+                                else {"hits": 0, "recall": None, "rr": None}
+                            ),
+                            "filters": f.model_dump(exclude_defaults=True) if isinstance(f, SearchFilters) else f,
+                            "parsed_ok": parsed_ok,
+                            "clarified": clarified,
+                            "relaxed": relaxed,
+                            "top_outside_gold": len(top) - len(passes_gold),
+                            "unjudged_top10": unjudged(top, c, passes_gold),
+                            "top10": top,
+                        }
+                    )
 
     summaries = {}
     for mode, results in by_mode.items():
@@ -303,7 +360,7 @@ def run_search(args, cfg, settings) -> None:
     report = {
         "layer": "search",
         "modes": args.modes,
-        "filters": "gold",
+        "filters": args.filters,
         "split": args.split,
         "date": now.isoformat(timespec="seconds"),
         "config": args.config,
@@ -311,7 +368,8 @@ def run_search(args, cfg, settings) -> None:
         "summary": summaries,
         "results": by_mode,
     }
-    out = ROOT / "results" / f"{now:%Y%m%dT%H%M%SZ}_search_{'+'.join(args.modes)}_{args.split}.json"
+    tag = "+".join(args.modes) + ("" if args.filters == ["gold"] else "_" + "+".join(args.filters))
+    out = ROOT / "results" / f"{now:%Y%m%dT%H%M%SZ}_search_{tag}_{args.split}.json"
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def line(name: str, a: dict) -> str:
@@ -322,7 +380,7 @@ def run_search(args, cfg, settings) -> None:
     for mode, results in by_mode.items():
         summary = summaries[mode]
         print(
-            f"search/{mode}/{args.split} (gold filters): {summary['cases']} cases, "
+            f"search/{mode}/{args.split}: {summary['cases']} cases, "
             f"SQL p50 {summary['sql_latency_ms']['p50']} ms, p95 {summary['sql_latency_ms']['p95']} ms"
         )
         print(line("all", summary))
@@ -337,6 +395,12 @@ def run_search(args, cfg, settings) -> None:
                     f"  MISS {r['id']} [{r['group']}] recall {r['recall']:.0%} rr {r['rr']:.2f} "
                     f"({r['hits']}/{min(r['n_relevant'], K)}, candidates {r['n_candidates']})"
                 )
+        if mode.startswith("parsed/"):
+            print(
+                f"  разбор полностью верен: {sum(bool(r['parsed_ok']) for r in results)}/{len(results)}, "
+                f"переспросил: {[r['id'] for r in results if r['clarified']] or 'нет'}, "
+                f"объектов вне эталонных фильтров в топ-10: {sum(r['top_outside_gold'] for r in results)}"
+            )
         if summary["unjudged_at_10"]:
             total = sum(summary["unjudged_at_10"].values())
             print(f"  НЕРАЗМЕЧЕННЫХ в топ-10: {total} — {summary['unjudged_at_10']} (дооценка: llm_label.py extend)")
@@ -353,6 +417,9 @@ def main() -> None:
         "--modes", nargs="+", default=["vector", "hybrid"], choices=["vector", "hybrid"], help="search: методы"
     )
     ap.add_argument("--verbose", action="store_true", help="search: разбивка по тегам")
+    ap.add_argument(
+        "--filters", nargs="+", default=["gold"], choices=["gold", "parsed"], help="search: источник фильтров"
+    )
     ap.add_argument("--split", default="dev", choices=["dev", "holdout"])
     ap.add_argument("--repeats", type=int, default=1, help="parse: прогонов на кейс, оценка разброса")
     ap.add_argument("--workers", type=int, default=4)

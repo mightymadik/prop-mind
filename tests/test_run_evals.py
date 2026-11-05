@@ -131,8 +131,11 @@ def test_unjudged_lists_top_objects_without_judgement():
     from evals.run_evals import unjudged
 
     case = {"judged_source_ids": ["a", "b"]}
-    assert unjudged(["a", "x", "b", "y"], case) == ["x", "y"]
-    assert unjudged(["a"], {}) == ["a"]  # нет разметки — всё неразмечено
+    passes_gold = {"a", "b", "x", "y"}
+    assert unjudged(["a", "x", "b", "y"], case, passes_gold) == ["x", "y"]
+    assert unjudged(["a"], {}, {"a"}) == ["a"]  # нет разметки — всё неразмечено
+    # вне эталонных фильтров (ошибка парсера) — заведомо не подходит, дооценивать нечего
+    assert unjudged(["z"], case, passes_gold) == []
 
 
 def test_embed_queries_uses_cache_keyed_by_model_and_text(monkeypatch, tmp_path):
