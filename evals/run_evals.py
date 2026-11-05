@@ -277,6 +277,16 @@ def parse_all(cases: list[dict], cfg, settings, workers: int) -> dict[str, Searc
         return dict(zip((c["id"] for c in cases), pool.map(one, cases), strict=True))
 
 
+def parsed_from_report(report: dict) -> dict[str, SearchFilters | str]:
+    """Фильтры от парсера из прошлого прогона: парсер недетерминирован (формулировка semantic_query
+    плавает), а сравнение методов и дооценка должны идти на одних и тех же фильтрах."""
+    key = next(k for k in report["results"] if k.startswith("parsed/"))
+    return {
+        r["id"]: SearchFilters.model_validate(r["filters"]) if isinstance(r["filters"], dict) else r["filters"]
+        for r in report["results"][key]
+    }
+
+
 def run_search(args, cfg, settings) -> None:
     """Все методы (--modes) × источники фильтров (--filters) в одном прогоне, на одной разметке.
 
@@ -289,7 +299,14 @@ def run_search(args, cfg, settings) -> None:
     if "gold" in args.filters:
         sources["gold"] = dict(gold)
     if "parsed" in args.filters:
-        sources["parsed"] = parse_all(cases, cfg, settings, args.workers)
+        if args.parsed_from:
+            frozen = parsed_from_report(json.loads(args.parsed_from.read_text(encoding="utf-8")))
+            missing = [c["id"] for c in cases if c["id"] not in frozen]
+            if missing:
+                raise SystemExit(f"в {args.parsed_from} нет разбора для {missing}")
+            sources["parsed"] = {c["id"]: frozen[c["id"]] for c in cases}
+        else:
+            sources["parsed"] = parse_all(cases, cfg, settings, args.workers)
 
     texts = {
         (src, c["id"]): query_text(f, c["query"]) if isinstance(f := sources[src][c["id"]], SearchFilters) else ""
@@ -361,6 +378,7 @@ def run_search(args, cfg, settings) -> None:
         "layer": "search",
         "modes": args.modes,
         "filters": args.filters,
+        "parsed_from": str(args.parsed_from) if args.parsed_from else None,
         "split": args.split,
         "date": now.isoformat(timespec="seconds"),
         "config": args.config,
@@ -420,6 +438,7 @@ def main() -> None:
     ap.add_argument(
         "--filters", nargs="+", default=["gold"], choices=["gold", "parsed"], help="search: источник фильтров"
     )
+    ap.add_argument("--parsed-from", type=Path, help="search: взять фильтры от парсера из этого отчёта")
     ap.add_argument("--split", default="dev", choices=["dev", "holdout"])
     ap.add_argument("--repeats", type=int, default=1, help="parse: прогонов на кейс, оценка разброса")
     ap.add_argument("--workers", type=int, default=4)

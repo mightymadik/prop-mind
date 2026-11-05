@@ -163,3 +163,20 @@ def test_embed_queries_uses_cache_keyed_by_model_and_text(monkeypatch, tmp_path)
     Cfg.embeddings = EmbeddingsConfig(provider="voyage", model="m2", dim=2, batch_size=2)
     run_evals.embed_queries(["a"], Cfg, Settings(), cache)
     assert calls[-1] == ["a"]  # другая модель — другой ключ
+
+
+def test_parsed_from_report_restores_filters_and_errors():
+    from evals.run_evals import parsed_from_report
+
+    report = {
+        "results": {
+            "gold/hybrid": [{"id": "d01", "filters": {"city": "Астана"}}],
+            "parsed/hybrid": [
+                {"id": "d01", "filters": {"city": "Астана", "rooms": [2], "semantic_query": "тихо"}},
+                {"id": "d02", "filters": "RuntimeError: no structured output"},
+            ],
+        }
+    }
+    got = parsed_from_report(report)
+    assert got["d01"] == SearchFilters(city="Астана", rooms=[2], semantic_query="тихо")
+    assert got["d02"] == "RuntimeError: no structured output"
