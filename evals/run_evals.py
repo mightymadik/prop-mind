@@ -589,6 +589,21 @@ class Verdict(BaseModel):
 
 
 RELAX_RU = {"features": "признаки", "conditions": "состояние", "districts": "район"}
+# обратная проверка — по тексту, не судьёй: на отрицательном критерии («НЕ утверждает») судья ошибался
+NO_MATCH_CLAIM = re.compile(r"(полностью\s+)?подходящих\s+(вариантов\s+|объектов\s+)?нет|ничего\s+не\s+подходит", re.I)
+
+
+def claims_no_match(text: str) -> str | None:
+    """Фраза «подходящих нет» в ответе, если есть."""
+    m = NO_MATCH_CLAIM.search(text)
+    return m.group(0) if m else None
+
+
+def evaluate_check(name: str, check: str, query: str, row: dict, text: str, cfg, settings) -> Verdict:
+    if name == "no_false_no_match":
+        found = claims_no_match(text)
+        return Verdict(verdict=found is None, reason=f"в ответе: «{found}»" if found else "фразы «подходящих нет» нет")
+    return judge(check, query, row, text, cfg, settings)
 
 
 def answer_checks(row: dict, case: dict) -> dict[str, str]:
@@ -604,8 +619,17 @@ def answer_checks(row: dict, case: dict) -> dict[str, str]:
     )
     if no_match:
         checks["states_no_match"] = (
-            "Ответ прямо говорит, что объектов, подходящих по смыслу запроса, нет (не выдаёт найденное за "
-            "подходящее), и предлагает, что можно изменить в запросе."
+            "Первая фраза ответа — «Полностью подходящих нет: …» (или дословно близкая) и после двоеточия "
+            "называет, какие пожелания не подтверждены описаниями; дальше идут ближайшие варианты с "
+            "оговорками и предложение, что ослабить в запросе. Подача найденного как «лучших» или "
+            "«подходящих» вариантов без такой первой фразы — не выполняет критерий."
+        )
+    shown_relevant = set(row.get("ids", [])) & set(case.get("relevant_source_ids") or [])
+    if shown_relevant and not row["relaxed"]:
+        checks["no_false_no_match"] = (
+            "Ответ НЕ утверждает, что полностью подходящих объектов нет: среди показанных кандидатов "
+            "подходящие есть. Если ответ начинается с «Полностью подходящих нет» или иначе говорит, что "
+            "ничего не подходит, — критерий не выполнен."
         )
     return checks
 
@@ -692,7 +716,7 @@ def run_answer(args, cfg, settings) -> None:
                     entry = {**a.__dict__, "cost_usd": round(cost_usd(a, cfg), 6), "checks": {}}
                     if args.judge:
                         for name, check in answer_checks(row, c).items():
-                            v = judge(check, c["query"], row, a.text, cfg, settings)
+                            v = evaluate_check(name, check, c["query"], row, a.text, cfg, settings)
                             entry["checks"][name] = {"verdict": v.verdict, "reason": v.reason}
                     row["answers"][m] = entry
                     verdicts = {k: v["verdict"] for k, v in entry["checks"].items()}
@@ -764,7 +788,7 @@ def run_answer_judge(args, cfg, settings) -> None:
         for m, a in row["answers"].items():
             a["checks"] = {}
             for name, check in answer_checks(row, all_cases[row["id"]]).items():
-                v = judge(check, row["query"], row, a["text"], cfg, settings)
+                v = evaluate_check(name, check, row["query"], row, a["text"], cfg, settings)
                 a["checks"][name] = {"verdict": v.verdict, "reason": v.reason}
                 totals.setdefault(m, {}).setdefault(name, []).append(v.verdict)
                 print(f"{row['id']} {m}: {name} {v.verdict}")  # без причин: они цитируют ответ

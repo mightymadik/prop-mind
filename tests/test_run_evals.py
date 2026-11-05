@@ -289,14 +289,18 @@ def test_grades_accept_any_dash():
 def test_answer_checks_by_case_kind():
     from evals.run_evals import answer_checks
 
-    row = {"id": "r01", "relaxed": ["features", "conditions"]}
+    row = {"id": "r01", "relaxed": ["features", "conditions"], "ids": ["a"]}
     checks = answer_checks(row, {"split": "relax"})
     assert list(checks) == ["mentions_relaxation"] and "признаки, состояние" in checks["mentions_relaxation"]
-    assert list(answer_checks({"id": "d16", "relaxed": []}, {})) == ["states_no_match"]
+    assert list(answer_checks({"id": "d16", "relaxed": [], "ids": ["a"]}, {})) == ["states_no_match"]
     labeled_empty = {"relevance": "llm_reviewed", "relevant_source_ids": []}
-    assert list(answer_checks({"id": "x1", "relaxed": []}, labeled_empty)) == ["states_no_match"]
+    assert list(answer_checks({"id": "x1", "relaxed": [], "ids": ["a"]}, labeled_empty)) == ["states_no_match"]
     auto_empty = {"relevance": "auto", "relevant_source_ids": []}
-    assert answer_checks({"id": "x2", "relaxed": []}, auto_empty) == {}
+    assert answer_checks({"id": "x2", "relaxed": [], "ids": ["a"]}, auto_empty) == {}
+    # обратная проверка — только если среди показанных есть подходящий и ничего не ослаблялось
+    has = {"relevance": "auto", "relevant_source_ids": ["a", "z"]}
+    assert list(answer_checks({"id": "x3", "relaxed": [], "ids": ["a", "b"]}, has)) == ["no_false_no_match"]
+    assert answer_checks({"id": "x4", "relaxed": [], "ids": ["b"]}, has) == {}  # подходящий не показан
 
 
 def test_expand_cases_splits_and_dedupes():
@@ -320,3 +324,13 @@ def test_judge_fills_criterion(monkeypatch):
     assert "КРИТЕРИЙ-X" in sent["system"] and "$check" not in sent["system"]
     assert "ОТВЕТ" in sent["user"] and "двушка" in sent["user"]
     assert "признаки" in sent["user"] and "features" not in sent["user"]
+
+
+def test_claims_no_match_phrases():
+    from evals.run_evals import claims_no_match
+
+    assert claims_no_match("Полностью подходящих нет: свет не подтверждён.") == "Полностью подходящих нет"
+    assert claims_no_match("К сожалению, ничего не подходит.") == "ничего не подходит"
+    assert claims_no_match("Подходящих вариантов нет.") == "Подходящих вариантов нет"
+    for ok in ("Все десять вариантов подходят.", "Лучшие варианты: [syn-1].", "Не подходит только [syn-2]."):
+        assert claims_no_match(ok) is None
