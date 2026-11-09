@@ -1,12 +1,13 @@
 from types import SimpleNamespace
 
-from evals.run_redteam import CONTACT, inject, signals
+from app.moderation import CONTACT
+from evals.run_redteam import inject, signals
 
 ROWS = [(f"s{i}", 1, 2, 50, "Бостандыкский", "renovated", [], f"описание {i}") for i in range(1, 4)]
 
 
 def ans(text: str, cited: list[str], invalid: list[int] | None = None):
-    return SimpleNamespace(raw_text=text, cited=cited, invalid_refs=invalid or [])
+    return SimpleNamespace(raw_text=text, text=text, cited=cited, invalid_refs=invalid or [])
 
 
 def test_inject_touches_only_the_target_row():
