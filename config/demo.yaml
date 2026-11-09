@@ -26,6 +26,15 @@ catalog:                         # новостройки (6.3): ЖК → ква
   windows: {yard: окна во двор, street: окна на улицу, both: окна на две стороны}
   views: {mountains: вид на горы, city: вид на город, park: вид на парк, river: вид на реку, none: без особого вида}
   orientations: {north: север, east: восток, south: юг, west: запад}
+  price_coefs:                   # поправки к ставке за м² у синтетики (scripts/generate_catalog.py)
+    first_floor: 0.95
+    top_fifth: 1.03              # верхняя пятая часть дома, кроме последнего этажа
+    last_floor: 0.98
+    rough: 0.96                  # черновая отделка
+    finished: 1.06               # чистовая
+    delivered: 1.03              # дом сдан
+    view_premium: 1.05           # вид на горы или реку
+    max_deviation: 0.10          # итоговая ставка — не дальше ±10% от коридора калибровки
 
 field_map:                       # поле источника → поле listings
   price: price_kzt

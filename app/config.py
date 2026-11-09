@@ -76,6 +76,7 @@ class CatalogConfig(BaseModel):
     windows: dict[str, str]
     views: dict[str, str]
     orientations: dict[str, str]
+    price_coefs: dict[str, float]  # поправки к ставке за м² при генерации синтетики
 
 
 class AppConfig(BaseModel):
