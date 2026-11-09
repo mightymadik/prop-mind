@@ -1,0 +1,558 @@
+{
+  "layer": "search_catalog",
+  "split": "dev",
+  "date": "2026-11-09T11:47:32+00:00",
+  "parsed_from": "evals/results/20261109T114610Z_parse_catalog_dev_x1.json",
+  "rerank_model": "rerank-2.5",
+  "embeddings": "voyage-3.5",
+  "ranking_matters": [
+    "n17",
+    "n27",
+    "n28",
+    "n29",
+    "n30",
+    "n31",
+    "n32",
+    "n34",
+    "n35",
+    "n36",
+    "n37"
+  ],
+  "summary": {
+    "векторы по всему запросу": {
+      "n": 11,
+      "recall_at_10": 0.615,
+      "mrr": 0.651
+    },
+    "+ гибрид (векторы + полнотекстовый, RRF)": {
+      "n": 11,
+      "recall_at_10": 0.729,
+      "mrr": 0.761
+    },
+    "векторы по смысловой части": {
+      "n": 11,
+      "recall_at_10": 0.662,
+      "mrr": 0.735
+    },
+    "гибрид по смысловой части": {
+      "n": 11,
+      "recall_at_10": 0.792,
+      "mrr": 0.72
+    },
+    "+ реранкер": {
+      "n": 11,
+      "recall_at_10": 0.963,
+      "mrr": 0.955
+    }
+  },
+  "results": [
+    {
+      "id": "n16",
+      "n_relevant": 5,
+      "steps": {
+        "векторы по всему запросу": {
+          "hits": 5,
+          "recall": 1.0,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "+ гибрид (векторы + полнотекстовый, RRF)": {
+          "hits": 5,
+          "recall": 1.0,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "векторы по смысловой части": {
+          "hits": 5,
+          "recall": 1.0,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "гибрид по смысловой части": {
+          "hits": 5,
+          "recall": 1.0,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "+ реранкер": {
+          "hits": 5,
+          "recall": 1.0,
+          "rr": 1.0,
+          "relaxed": []
+        }
+      },
+      "n_candidates": 8,
+      "ranking_matters": false
+    },
+    {
+      "id": "n17",
+      "n_relevant": 15,
+      "steps": {
+        "векторы по всему запросу": {
+          "hits": 3,
+          "recall": 0.3,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "+ гибрид (векторы + полнотекстовый, RRF)": {
+          "hits": 5,
+          "recall": 0.5,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "векторы по смысловой части": {
+          "hits": 4,
+          "recall": 0.4,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "гибрид по смысловой части": {
+          "hits": 6,
+          "recall": 0.6,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "+ реранкер": {
+          "hits": 8,
+          "recall": 0.8,
+          "rr": 1.0,
+          "relaxed": []
+        }
+      },
+      "n_candidates": 42,
+      "ranking_matters": true
+    },
+    {
+      "id": "n18",
+      "n_relevant": 2,
+      "steps": {
+        "векторы по всему запросу": {
+          "hits": 2,
+          "recall": 1.0,
+          "rr": 0.5,
+          "relaxed": []
+        },
+        "+ гибрид (векторы + полнотекстовый, RRF)": {
+          "hits": 2,
+          "recall": 1.0,
+          "rr": 0.5,
+          "relaxed": []
+        },
+        "векторы по смысловой части": {
+          "hits": 2,
+          "recall": 1.0,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "гибрид по смысловой части": {
+          "hits": 2,
+          "recall": 1.0,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "+ реранкер": {
+          "hits": 2,
+          "recall": 1.0,
+          "rr": 1.0,
+          "relaxed": []
+        }
+      },
+      "n_candidates": 4,
+      "ranking_matters": false
+    },
+    {
+      "id": "n19",
+      "n_relevant": 0,
+      "steps": {},
+      "n_candidates": 28,
+      "ranking_matters": true
+    },
+    {
+      "id": "n27",
+      "n_relevant": 1,
+      "steps": {
+        "векторы по всему запросу": {
+          "hits": 1,
+          "recall": 1.0,
+          "rr": 0.333,
+          "relaxed": []
+        },
+        "+ гибрид (векторы + полнотекстовый, RRF)": {
+          "hits": 1,
+          "recall": 1.0,
+          "rr": 0.333,
+          "relaxed": []
+        },
+        "векторы по смысловой части": {
+          "hits": 1,
+          "recall": 1.0,
+          "rr": 0.25,
+          "relaxed": []
+        },
+        "гибрид по смысловой части": {
+          "hits": 1,
+          "recall": 1.0,
+          "rr": 0.125,
+          "relaxed": []
+        },
+        "+ реранкер": {
+          "hits": 1,
+          "recall": 1.0,
+          "rr": 0.5,
+          "relaxed": []
+        }
+      },
+      "n_candidates": 28,
+      "ranking_matters": true
+    },
+    {
+      "id": "n28",
+      "n_relevant": 5,
+      "steps": {
+        "векторы по всему запросу": {
+          "hits": 2,
+          "recall": 0.4,
+          "rr": 0.5,
+          "relaxed": []
+        },
+        "+ гибрид (векторы + полнотекстовый, RRF)": {
+          "hits": 4,
+          "recall": 0.8,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "векторы по смысловой части": {
+          "hits": 3,
+          "recall": 0.6,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "гибрид по смысловой части": {
+          "hits": 4,
+          "recall": 0.8,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "+ реранкер": {
+          "hits": 5,
+          "recall": 1.0,
+          "rr": 1.0,
+          "relaxed": []
+        }
+      },
+      "n_candidates": 42,
+      "ranking_matters": true
+    },
+    {
+      "id": "n29",
+      "n_relevant": 9,
+      "steps": {
+        "векторы по всему запросу": {
+          "hits": 4,
+          "recall": 0.444,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "+ гибрид (векторы + полнотекстовый, RRF)": {
+          "hits": 6,
+          "recall": 0.667,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "векторы по смысловой части": {
+          "hits": 6,
+          "recall": 0.667,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "гибрид по смысловой части": {
+          "hits": 6,
+          "recall": 0.667,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "+ реранкер": {
+          "hits": 8,
+          "recall": 0.889,
+          "rr": 1.0,
+          "relaxed": []
+        }
+      },
+      "n_candidates": 28,
+      "ranking_matters": true
+    },
+    {
+      "id": "n30",
+      "n_relevant": 1,
+      "steps": {
+        "векторы по всему запросу": {
+          "hits": 1,
+          "recall": 1.0,
+          "rr": 0.5,
+          "relaxed": []
+        },
+        "+ гибрид (векторы + полнотекстовый, RRF)": {
+          "hits": 1,
+          "recall": 1.0,
+          "rr": 0.333,
+          "relaxed": []
+        },
+        "векторы по смысловой части": {
+          "hits": 1,
+          "recall": 1.0,
+          "rr": 0.333,
+          "relaxed": []
+        },
+        "гибрид по смысловой части": {
+          "hits": 1,
+          "recall": 1.0,
+          "rr": 0.1,
+          "relaxed": []
+        },
+        "+ реранкер": {
+          "hits": 1,
+          "recall": 1.0,
+          "rr": 1.0,
+          "relaxed": []
+        }
+      },
+      "n_candidates": 42,
+      "ranking_matters": true
+    },
+    {
+      "id": "n31",
+      "n_relevant": 9,
+      "steps": {
+        "векторы по всему запросу": {
+          "hits": 9,
+          "recall": 1.0,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "+ гибрид (векторы + полнотекстовый, RRF)": {
+          "hits": 8,
+          "recall": 0.889,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "векторы по смысловой части": {
+          "hits": 8,
+          "recall": 0.889,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "гибрид по смысловой части": {
+          "hits": 8,
+          "recall": 0.889,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "+ реранкер": {
+          "hits": 9,
+          "recall": 1.0,
+          "rr": 1.0,
+          "relaxed": []
+        }
+      },
+      "n_candidates": 12,
+      "ranking_matters": true
+    },
+    {
+      "id": "n32",
+      "n_relevant": 24,
+      "steps": {
+        "векторы по всему запросу": {
+          "hits": 7,
+          "recall": 0.7,
+          "rr": 0.333,
+          "relaxed": []
+        },
+        "+ гибрид (векторы + полнотекстовый, RRF)": {
+          "hits": 6,
+          "recall": 0.6,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "векторы по смысловой части": {
+          "hits": 9,
+          "recall": 0.9,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "гибрид по смысловой части": {
+          "hits": 8,
+          "recall": 0.8,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "+ реранкер": {
+          "hits": 10,
+          "recall": 1.0,
+          "rr": 1.0,
+          "relaxed": []
+        }
+      },
+      "n_candidates": 42,
+      "ranking_matters": true
+    },
+    {
+      "id": "n33",
+      "n_relevant": 0,
+      "steps": {},
+      "n_candidates": 28,
+      "ranking_matters": true
+    },
+    {
+      "id": "n34",
+      "n_relevant": 4,
+      "steps": {
+        "векторы по всему запросу": {
+          "hits": 3,
+          "recall": 0.75,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "+ гибрид (векторы + полнотекстовый, RRF)": {
+          "hits": 3,
+          "recall": 0.75,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "векторы по смысловой части": {
+          "hits": 3,
+          "recall": 0.75,
+          "rr": 0.5,
+          "relaxed": []
+        },
+        "гибрид по смысловой части": {
+          "hits": 4,
+          "recall": 1.0,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "+ реранкер": {
+          "hits": 4,
+          "recall": 1.0,
+          "rr": 1.0,
+          "relaxed": []
+        }
+      },
+      "n_candidates": 42,
+      "ranking_matters": true
+    },
+    {
+      "id": "n35",
+      "n_relevant": 7,
+      "steps": {
+        "векторы по всему запросу": {
+          "hits": 4,
+          "recall": 0.571,
+          "rr": 0.5,
+          "relaxed": []
+        },
+        "+ гибрид (векторы + полнотекстовый, RRF)": {
+          "hits": 5,
+          "recall": 0.714,
+          "rr": 0.5,
+          "relaxed": []
+        },
+        "векторы по смысловой части": {
+          "hits": 4,
+          "recall": 0.571,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "гибрид по смысловой части": {
+          "hits": 6,
+          "recall": 0.857,
+          "rr": 0.5,
+          "relaxed": []
+        },
+        "+ реранкер": {
+          "hits": 7,
+          "recall": 1.0,
+          "rr": 1.0,
+          "relaxed": []
+        }
+      },
+      "n_candidates": 24,
+      "ranking_matters": true
+    },
+    {
+      "id": "n36",
+      "n_relevant": 2,
+      "steps": {
+        "векторы по всему запросу": {
+          "hits": 0,
+          "recall": 0.0,
+          "rr": 0.0,
+          "relaxed": []
+        },
+        "+ гибрид (векторы + полнотекстовый, RRF)": {
+          "hits": 1,
+          "recall": 0.5,
+          "rr": 0.2,
+          "relaxed": []
+        },
+        "векторы по смысловой части": {
+          "hits": 0,
+          "recall": 0.0,
+          "rr": 0.0,
+          "relaxed": []
+        },
+        "гибрид по смысловой части": {
+          "hits": 1,
+          "recall": 0.5,
+          "rr": 0.2,
+          "relaxed": []
+        },
+        "+ реранкер": {
+          "hits": 2,
+          "recall": 1.0,
+          "rr": 1.0,
+          "relaxed": []
+        }
+      },
+      "n_candidates": 42,
+      "ranking_matters": true
+    },
+    {
+      "id": "n37",
+      "n_relevant": 16,
+      "steps": {
+        "векторы по всему запросу": {
+          "hits": 6,
+          "recall": 0.6,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "+ гибрид (векторы + полнотекстовый, RRF)": {
+          "hits": 6,
+          "recall": 0.6,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "векторы по смысловой части": {
+          "hits": 5,
+          "recall": 0.5,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "гибрид по смысловой части": {
+          "hits": 6,
+          "recall": 0.6,
+          "rr": 1.0,
+          "relaxed": []
+        },
+        "+ реранкер": {
+          "hits": 9,
+          "recall": 0.9,
+          "rr": 1.0,
+          "relaxed": []
+        }
+      },
+      "n_candidates": 41,
+      "ranking_matters": true
+    }
+  ]
+}

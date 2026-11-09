@@ -344,3 +344,17 @@ def test_catalog_compare_treats_year_without_quarter_as_q4():
     assert all(compare_filters(got, c).values())
     assert compare_filters(got.model_copy(update={"completion_max_quarter": 2}), c)["completion_max_quarter"] is False
     assert compare_filters(got.model_copy(update={"views": ["river"]}), c)["views"] is False  # лишний фильтр
+
+
+def test_catalog_filters_from_parse_report():
+    from app.schemas import CatalogFilters
+    from evals.run_evals import catalog_filters_from_report
+
+    report = {
+        "results": [
+            {"id": "n01", "runs": [{"got": {"city": "Астана", "rooms": [2]}, "error": None}]},
+            {"id": "n02", "runs": [{"got": None, "error": "RuntimeError: x"}]},
+        ]
+    }
+    out = catalog_filters_from_report(report)
+    assert out["n01"] == CatalogFilters(city="Астана", rooms=[2]) and out["n02"] == "RuntimeError: x"
