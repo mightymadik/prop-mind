@@ -42,5 +42,6 @@ CREATE TABLE query_log (
   latency_ms         INT,
   timings_ms         JSONB,                 -- по этапам: parse, embed, search, rerank, ttft, answer
   cost_usd           NUMERIC(10,6),         -- оценка сверху: бесплатные токены не учитываются
+  flagged_source_ids TEXT[],                -- показанные объекты с признаками вставки или набивки — на модерацию
   created_at         TIMESTAMPTZ NOT NULL DEFAULT now()
 );

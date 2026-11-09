@@ -9,6 +9,7 @@ from app.config import AppConfig, Settings
 from app.costs import track
 from app.db import connect
 from app.llm.answer import generate_answer
+from app.moderation import flagged
 from app.pii import mask_pii
 from app.pipeline import Retrieval, retrieve
 from app.schemas import SearchFilters
@@ -20,9 +21,10 @@ CARD_FIELDS = ("source_id", "price_kzt", "rooms", "area_m2", "district", "condit
 
 LOG_SQL = """
 INSERT INTO query_log (query, filters, relaxed, clarification, result_source_ids, answer_model, fallback,
-                       invalid_refs, error, latency_ms, timings_ms, cost_usd)
+                       invalid_refs, error, latency_ms, timings_ms, cost_usd, flagged_source_ids)
 VALUES (%(query)s, %(filters)s, %(relaxed)s, %(clarification)s, %(result_source_ids)s, %(answer_model)s,
-        %(fallback)s, %(invalid_refs)s, %(error)s, %(latency_ms)s, %(timings_ms)s, %(cost_usd)s)
+        %(fallback)s, %(invalid_refs)s, %(error)s, %(latency_ms)s, %(timings_ms)s, %(cost_usd)s,
+        %(flagged_source_ids)s)
 """
 
 
@@ -91,6 +93,7 @@ def run_search(query: str, cfg: AppConfig, settings: Settings, on_event: Event |
             else:
                 payload["relaxed"] = r.relaxed
                 payload["results"] = [card(row, cfg) for row in r.rows]
+                payload["flagged"] = flagged(r.rows, cfg.moderation)  # на модерацию; пользователю не показываем
                 # номер [n] в тексте ответа = n-й объект этого списка
                 emit("results", {"relaxed": r.relaxed, "results": payload["results"]})
                 emit("status", {"stage": "answer"})
@@ -145,6 +148,7 @@ def log(payload: dict, r: Retrieval | None, answer) -> None:
         "latency_ms": payload["latency_ms"],
         "timings_ms": json.dumps(payload["timings_ms"]),
         "cost_usd": payload.get("cost_usd"),
+        "flagged_source_ids": payload.get("flagged") or None,
     }
     with connect() as conn:
         conn.execute(LOG_SQL, row)
