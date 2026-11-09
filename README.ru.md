@@ -25,7 +25,7 @@ flowchart LR
     A --> U["страница чата / виджет<br/>стриминг через SSE"]
 
     subgraph idx [офлайн-индексация]
-      L[адаптер ListingSource] --> I["sync_index.py<br/>search_text + эмбеддинги voyage-3.5"] --> DB[(Postgres + pgvector)]
+      L[адаптер CatalogSource] --> I["sync_catalog.py<br/>ЖК: search_text + эмбеддинги voyage-3.5"] --> DB[(Postgres + pgvector)]
     end
 ```
 
@@ -176,14 +176,15 @@ flowchart LR
 cp .env.example .env            # ANTHROPIC_API_KEY, VOYAGE_API_KEY
 docker compose up -d --build    # Postgres + pgvector, API на :8000 (страницу чата Docker соберёт сам)
 uv sync
-uv run python scripts/sync_index.py --config config/demo.yaml   # индексация data/listings.jsonl (< $0,01 Voyage)
-curl localhost:8000/health      # "listings": 1048; чат: http://localhost:8000/chat
+uv run python scripts/migrate.py                                # таблицы для уже созданной базы
+uv run python scripts/sync_catalog.py --config config/demo.yaml # индексация data/complexes.jsonl + квартиры (< $0,01 Voyage)
+curl localhost:8000/health      # "complexes": 70; чат: http://localhost:8000/chat
 ```
 
 - Новая синтетика (необязательно, вызывает Claude):
-  `uv run python scripts/generate_listings.py --config config/demo.yaml --count 2500`
+  `uv run python scripts/generate_catalog.py --config config/demo.yaml`
 - Тесты: `uv run pytest`; страница чата: `cd web/chat-app && npm ci && npm test && npm run typecheck`
-- Evals: `uv run python evals/run_evals.py --config config/demo.yaml --layer parse`
+- Evals: `uv run python evals/run_evals.py --repeats 3` (разбор)
   (также `search`, `answer`; см. `--help`)
 - Деплой на сервер (Oracle Cloud Always Free, Caddy + HTTPS): [deploy/oracle/README.md](deploy/oracle/README.md)
 

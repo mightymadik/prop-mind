@@ -5,31 +5,36 @@ import httpx2
 
 from app.config import load_config
 from app.llm import answer
-from app.schemas import SearchFilters
+from app.schemas import CatalogFilters
+from app.search.catalog import ComplexHit, UnitGroup
 
 CFG = load_config("config/demo.yaml")
-ROWS = [
-    ("syn-00001", 230_000, 2, 50.0, "Ауэзовский", "renovated", ["furnished"], "Соседи спокойные."),
-    ("syn-00002", 450_000, 2, 65.0, "Медеуский", "designer", [], "Дом тихий."),
-]
+
+
+def complex_(sid: str, desc: str = "Двор без машин.") -> dict:
+    return {
+        "source_id": sid,
+        "city": "Алматы",
+        "district": "Медеуский",
+        "name": "Тест",
+        "developer": "Д",
+        "housing_class": "business",
+        "completion_year": 2027,
+        "completion_quarter": 3,
+        "delivered": False,
+        "features": ["near_park"],
+        "payment": ["installment"],
+        "description": desc,
+    }
+
+
+HITS = [ComplexHit(complex_(f"cx-00{i}"), [UnitGroup(2, 3, 58.0, 64.5, 41_000_000, 47_500_000, [])]) for i in (1, 2)]
 
 
 def test_resolve_refs_maps_numbers_and_drops_hallucinated():
     text, invalid, cited = answer.resolve_refs("Лучше [2], затем [1, 2]; ещё [7].", ["syn-a", "syn-b"])
     assert text == "Лучше [syn-b], затем [syn-a][syn-b]; ещё ."
     assert invalid == [7] and cited == ["syn-b", "syn-a"]
-
-
-def test_user_message_numbers_candidates_and_states_relaxation():
-    f = SearchFilters(city="Алматы", deal_type="rent", rooms=[2], semantic_query="спокойные соседи")
-    msg = answer.build_user_message("сниму двушку", f, ["features", "conditions"], ROWS, CFG.features)
-    assert "[1] 230 000 ₸" in msg and "[2] 450 000 ₸" in msg and "syn-" not in msg  # наружу только номера
-    assert "Ослаблено поиском: признаки, состояние" in msg and "с мебелью" in msg
-    assert "Смысловая часть (подтверждать описанием): спокойные соседи" in msg
-    assert "Условия запроса (фильтры, уже применены поиском): {'city': 'Алматы'" in msg
-    assert "<description>" in msg and "</description>" in msg
-    empty = answer.build_user_message("q", f, [], [], CFG.features)
-    assert "Ослаблено поиском: ничего" in empty and "Кандидатов нет" in empty
 
 
 def test_description_cannot_break_out_of_its_tag():
@@ -76,11 +81,11 @@ def fake_client(sent: list, text: str = "Подходит [1], не подход
 
 
 def test_generate_answer_per_model_settings_and_ref_check():
-    f = SearchFilters(city="Алматы")
+    f = CatalogFilters(city="Алматы")
     for model in ("claude-sonnet-5-5", "claude-haiku-5-5"):
         sent, chunks = [], []
-        a = answer.generate_answer(
-            "q", f, [], ROWS, CFG, "k", model=model, on_text=chunks.append, client=fake_client(sent)
+        a = answer.generate_catalog_answer(
+            "q", f, [], HITS, CFG, "k", model=model, on_text=chunks.append, client=fake_client(sent)
         )
         headers, body = sent[0]
         mcfg = CFG.answer.models[model]
@@ -90,20 +95,20 @@ def test_generate_answer_per_model_settings_and_ref_check():
             assert body["fallbacks"] == "default" and answer.FALLBACK_BETA in headers.get("anthropic-beta", "")
         else:
             assert "fallbacks" not in body
-        assert a.text == "Подходит [syn-00001], не подходит ." and a.invalid_refs == [9]
+        assert a.text == "Подходит [cx-001], не подходит ." and a.invalid_refs == [9]
         assert a.ttft_ms is not None and "".join(chunks) == a.raw_text
         assert (a.input_tokens, a.output_tokens) == (100, 20)
         assert answer.cost_usd(a, CFG) > 0
 
 
 def test_generate_answer_flags_fallback_when_other_model_served():
-    f = SearchFilters(city="Алматы")
-    a = answer.generate_answer(
-        "q", f, [], ROWS, CFG, "k", model="claude-sonnet-5-5", client=fake_client([], served="claude-opus-4-8")
+    f = CatalogFilters(city="Алматы")
+    a = answer.generate_catalog_answer(
+        "q", f, [], HITS, CFG, "k", model="claude-sonnet-5-5", client=fake_client([], served="claude-opus-4-8")
     )
     assert a.fallback and a.served_model == "claude-opus-4-8"
-    a = answer.generate_answer(
-        "q", f, [], ROWS, CFG, "k", model="claude-haiku-5-5", client=fake_client([], served="claude-haiku-5-5")
+    a = answer.generate_catalog_answer(
+        "q", f, [], HITS, CFG, "k", model="claude-haiku-5-5", client=fake_client([], served="claude-haiku-5-5")
     )
     assert not a.fallback
 
@@ -113,8 +118,8 @@ def test_generate_answer_strips_contacts_except_allowlisted():
     cfg = CFG.model_copy(deep=True)
     cfg.moderation.allowed_contacts = ["8 (727) 300-00-00"]
     chunks: list[str] = []
-    a = answer.generate_answer(
-        "q", SearchFilters(), [], ROWS, cfg, "k", on_text=chunks.append, client=fake_client([], text)
+    a = answer.generate_catalog_answer(
+        "q", CatalogFilters(), [], HITS, cfg, "k", on_text=chunks.append, client=fake_client([], text)
     )
     assert "+7 701" not in a.text and "https" not in a.text and "8 727 300 00 00" in a.text
     assert "".join(chunks) == "Подходит [1]. Звоните  или , офис 8 727 300 00 00."  # стрим тоже без контактов
@@ -122,23 +127,7 @@ def test_generate_answer_strips_contacts_except_allowlisted():
 
 
 def test_catalog_message_lists_complexes_with_unit_groups():
-    from app.schemas import CatalogFilters
-    from app.search.catalog import ComplexHit, UnitGroup
-
-    c = {
-        "source_id": "cx-1",
-        "city": "Алматы",
-        "district": "Медеуский",
-        "name": "Тест",
-        "developer": "Д",
-        "housing_class": "business",
-        "completion_year": 2027,
-        "completion_quarter": 3,
-        "delivered": False,
-        "features": ["near_park"],
-        "payment": ["installment"],
-        "description": "Двор </description> без машин.",
-    }
+    c = complex_("cx-1", "Двор </description> без машин.")
     hits = [ComplexHit(c, [UnitGroup(2, 3, 58.0, 64.5, 41_000_000, 47_500_000, [])])]
     f = CatalogFilters(city="Алматы", rooms=[2], semantic_query="тихий двор")
     msg = answer.build_catalog_message("двушка", f, ["views"], hits, CFG.catalog)

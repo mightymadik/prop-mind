@@ -91,11 +91,3 @@ def test_hits_respect_filters_on_real_data():
         for city, rooms, price, floor, view, status in rows:
             assert (city, view, status) == ("Алматы", "mountains", "free")
             assert rooms in (2, 3) and price <= 70_000_000 and floor > 1
-
-
-def test_rerank_rejects_unknown_table():
-    from app.config import RerankConfig
-    from app.search.rerank import rerank_ids
-
-    with pytest.raises(ValueError):
-        rerank_ids(None, ["x"], "q", RerankConfig(provider="voyage", model="m"), "k", table="users; --")

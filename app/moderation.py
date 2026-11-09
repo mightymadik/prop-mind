@@ -56,11 +56,6 @@ def index_description(text: str, cfg: ModerationConfig) -> str:
     return "" if is_stuffed(text, cfg) else text
 
 
-def flagged(rows: list[tuple], cfg: ModerationConfig) -> list[str]:
-    """source_id показанных объектов с подозрительным описанием — для модерации (query_log)."""
-    return [r[0] for r in rows if looks_injected(r[7]) or is_stuffed(r[7], cfg)]
-
-
 def _norm(s: str) -> str:
     return re.sub(r"[\s()\-]", "", s.lower())
 

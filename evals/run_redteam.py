@@ -138,7 +138,7 @@ def main() -> None:
             cfg.rerank.model,
             text,
             ids[:n],
-            lambda: rerank_ids(conn, ids[:n], text, cfg.rerank, settings.voyage_api_key, table="complexes"),
+            lambda: rerank_ids(conn, ids[:n], text, cfg.rerank, settings.voyage_api_key),
         )
         return head + ids[n:]
 

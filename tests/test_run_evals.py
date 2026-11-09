@@ -1,4 +1,4 @@
-from app.schemas import SearchFilters
+from app.schemas import CatalogFilters as SearchFilters
 from evals.run_evals import compare_filters, summarize
 
 
@@ -12,11 +12,13 @@ def test_exact_match_lists_as_sets_and_missing_fields_must_be_default():
 
     checks = compare_filters(SearchFilters(city="Алматы", rooms=[2, 3], features=["parking"]), c)
     assert checks["features"] is False  # лишний фильтр — ошибка
-    assert compare_filters(SearchFilters(city="Алматы", rooms=[2, 3], deal_type="rent"), c)["deal_type"] is False
+    assert (
+        compare_filters(SearchFilters(city="Алматы", rooms=[2, 3], delivered_only=True), c)["delivered_only"] is False
+    )
 
 
 def test_empty_list_equals_none():
-    assert all(compare_filters(SearchFilters(districts=[], conditions=[]), case({})).values())
+    assert all(compare_filters(SearchFilters(districts=[], views=[]), case({"views": None})).values())
 
 
 def test_semantic_modes():
@@ -68,13 +70,15 @@ def test_summarize_single_repeat_has_zero_spread():
 
 def test_run_case_reports_got_without_defaults(monkeypatch):
     from app.config import Settings, load_config
-    from app.schemas import build_parser_schema
+    from app.schemas import build_catalog_parser_schema
     from evals import run_evals
 
     cfg = load_config("config/demo.yaml")
     empty = {k: v for k, v in SearchFilters().model_dump().items()}
     monkeypatch.setattr(
-        run_evals, "parse_query", lambda q, c, s: build_parser_schema(cfg)(**{**empty, "city": "Алматы"})
+        run_evals,
+        "parse_catalog_query",
+        lambda q, c, s: build_catalog_parser_schema(cfg)(**{**empty, "city": "Алматы"}),
     )
     r = run_evals.run_case({"query": "q", "expected_filters": {"city": "Алматы"}, "semantic": "empty"}, cfg, Settings())
     assert r["ok"] and r["got"] == {"city": "Алматы"}
@@ -89,53 +93,6 @@ def test_search_metrics_recall_capped_at_k_and_rr():
     assert search_metrics(ranked, many)["recall"] == 0.5
     assert search_metrics(ranked, ranked) == {"hits": 10, "recall": 1.0, "rr": 1.0}
     assert search_metrics(ranked, ["nope"]) == {"hits": 0, "recall": 0.0, "rr": 0.0}
-
-
-def test_ranking_matters_needs_semantic_and_more_than_k_candidates():
-    from evals.run_evals import ranking_matters
-
-    assert ranking_matters({"semantic": "required"}, 11)
-    assert not ranking_matters({"semantic": "required"}, 10)
-    assert not ranking_matters({"semantic": "empty"}, 500)
-
-
-def test_summarize_search_groups_and_excludes_empty():
-    from evals.run_evals import summarize_search
-
-    def r(id_, group, recall, rr, n_rel=3, tags=("simple",)):
-        return {
-            "id": id_,
-            "group": group,
-            "recall": recall,
-            "rr": rr,
-            "n_relevant": n_rel,
-            "tags": list(tags),
-            "latency_ms": 5,
-        }
-
-    s = summarize_search(
-        [
-            r("a", "ranking", 0.5, 1.0, tags=("semantic",)),
-            r("b", "other", 1.0, 1.0),
-            r("c", "other", 0.0, 0.0),
-            r("e", "other", None, None, n_rel=0),
-        ]
-    )
-    assert (s["n"], s["recall_at_10"], s["mrr"]) == (3, 0.5, 0.667)
-    assert s["by_group"]["ranking"] == {"n": 1, "recall_at_10": 0.5, "mrr": 1.0}
-    assert s["by_group"]["other"] == {"n": 2, "recall_at_10": 0.5, "mrr": 0.5}
-    assert s["empty_relevant"] == ["e"] and "semantic" in s["by_tag"]
-
-
-def test_unjudged_lists_top_objects_without_judgement():
-    from evals.run_evals import unjudged
-
-    case = {"judged_source_ids": ["a", "b"]}
-    passes_gold = {"a", "b", "x", "y"}
-    assert unjudged(["a", "x", "b", "y"], case, passes_gold) == ["x", "y"]
-    assert unjudged(["a"], {}, {"a"}) == ["a"]  # нет разметки — всё неразмечено
-    # вне эталонных фильтров (ошибка парсера) — заведомо не подходит, дооценивать нечего
-    assert unjudged(["z"], case, passes_gold) == []
 
 
 def test_embed_queries_uses_cache_keyed_by_model_and_text(monkeypatch, tmp_path):
@@ -165,36 +122,6 @@ def test_embed_queries_uses_cache_keyed_by_model_and_text(monkeypatch, tmp_path)
     assert calls[-1] == ["a"]  # другая модель — другой ключ
 
 
-def test_parsed_from_report_restores_filters_and_errors():
-    from evals.run_evals import parsed_from_report
-
-    report = {
-        "results": {
-            "gold/hybrid": [{"id": "d01", "filters": {"city": "Астана"}}],
-            "parsed/hybrid": [
-                {"id": "d01", "filters": {"city": "Астана", "rooms": [2], "semantic_query": "тихо"}},
-                {"id": "d02", "filters": "RuntimeError: no structured output"},
-            ],
-        }
-    }
-    got = parsed_from_report(report)
-    assert got["d01"] == SearchFilters(city="Астана", rooms=[2], semantic_query="тихо")
-    assert got["d02"] == "RuntimeError: no structured output"
-
-
-def test_search_mode_validation():
-    import argparse
-
-    import pytest
-
-    from evals.run_evals import search_mode
-
-    assert search_mode("hybrid") == "hybrid" and search_mode("rerank:rerank-3") == "rerank:rerank-3"
-    for bad in ("bm25", "rerank:", "rerank"):
-        with pytest.raises(argparse.ArgumentTypeError):
-            search_mode(bad)
-
-
 def test_rerank_cache_computes_once_and_persists(tmp_path):
     from evals.run_evals import RerankCache
 
@@ -206,20 +133,6 @@ def test_rerank_cache_computes_once_and_persists(tmp_path):
     assert calls == [1]  # второй раз — из файла
     RerankCache(path).get_or_compute("m2", "q", ["a", "b"], lambda: calls.append(1) or ["a", "b"])
     assert calls == [1, 1]  # другая модель — другой ключ
-
-
-def test_search_variant_validation():
-    import argparse
-
-    import pytest
-
-    from evals.run_evals import search_variant
-
-    assert search_variant("gold/vector") == "gold/vector"
-    assert search_variant("parsed/rerank:rerank-2.5") == "parsed/rerank:rerank-2.5"
-    for bad in ("vector", "oracle/vector", "parsed/bm25"):
-        with pytest.raises(argparse.ArgumentTypeError):
-            search_variant(bad)
 
 
 def _answer_rows(n: int = 8) -> list[dict]:
@@ -289,10 +202,9 @@ def test_grades_accept_any_dash():
 def test_answer_checks_by_case_kind():
     from evals.run_evals import answer_checks
 
-    row = {"id": "r01", "relaxed": ["features", "conditions"], "ids": ["a"]}
+    row = {"id": "r01", "relaxed": ["features", "views"], "ids": ["a"]}
     checks = answer_checks(row, {"split": "relax"})
-    assert list(checks) == ["mentions_relaxation"] and "признаки, состояние" in checks["mentions_relaxation"]
-    assert list(answer_checks({"id": "d16", "relaxed": [], "ids": ["a"]}, {})) == ["states_no_match"]
+    assert list(checks) == ["mentions_relaxation"] and "инфраструктура ЖК, вид из окна" in checks["mentions_relaxation"]
     labeled_empty = {"relevance": "llm_reviewed", "relevant_source_ids": []}
     assert list(answer_checks({"id": "x1", "relaxed": [], "ids": ["a"]}, labeled_empty)) == ["states_no_match"]
     auto_empty = {"relevance": "auto", "relevant_source_ids": []}
@@ -323,7 +235,7 @@ def test_judge_fills_criterion(monkeypatch):
     assert v.verdict and sent["model"] == cfg.models["judge"]
     assert "КРИТЕРИЙ-X" in sent["system"] and "$check" not in sent["system"]
     assert "ОТВЕТ" in sent["user"] and "двушка" in sent["user"]
-    assert "признаки" in sent["user"] and "features" not in sent["user"]
+    assert "инфраструктура ЖК" in sent["user"] and "features" not in sent["user"]
 
 
 def test_claims_no_match_phrases():

@@ -10,7 +10,7 @@ AI-поиск недвижимости: пользователь пишет за
 ```
 запрос → parse_query (LLM → SearchFilters) → hybrid search (SQL-фильтры + FTS + pgvector, RRF)
        → rerank (топ-50 → топ-10) → answer (LLM, ссылки [id], проверка id) → ответ
-офлайн: ListingSource (адаптер) → sync_index.py → search_text + embedding → Postgres
+офлайн: CatalogSource (адаптер) → sync_catalog.py → ЖК (search_text + embedding) и квартиры → Postgres
 ```
 
 Принцип: объекты находит база, LLM только понимает запрос и объясняет ответ.
@@ -32,11 +32,11 @@ v1 — фиксированный workflow. v2 (tool use) — только по�
   `web/chat-app/dist/` (не в git), её раздаёт FastAPI на `/chat`; разработка: `npm run dev` (прокси на :8000).
   Docker собирает её сам.
 - Тесты: `uv run pytest`; страницы чата: `cd web/chat-app && npm test && npm run typecheck`
-- Синтетика: `uv run python scripts/generate_listings.py --config config/demo.yaml --count 2500`
-- Индексация: `uv run python scripts/sync_index.py --config config/demo.yaml`
-- Новостройки (6.3): генерация `uv run python scripts/generate_catalog.py --config config/demo.yaml`,
-  индексация `uv run python scripts/sync_catalog.py --config config/demo.yaml`
-- Evals: `uv run python evals/run_evals.py --config config/demo.yaml` (шаг 2)
+- Синтетика (ЖК и квартиры): `uv run python scripts/generate_catalog.py --config config/demo.yaml`
+- Индексация: `uv run python scripts/sync_catalog.py --config config/demo.yaml`
+- Разметка смысловых кейсов: `uv run python scripts/label_catalog.py review|apply`
+- Evals: разбор `uv run python evals/run_evals.py --repeats 3`; поиск `--layer search-catalog --parsed-from <отчёт>`;
+  ответ `--layer answer --models claude-sonnet-5-5 --judge --parsed-from <отчёт>`; red-team `evals/run_redteam.py`
 - Git-хук атрибуции: `git config core.hooksPath .githooks` (один раз, вручную)
 
 (Обновляй этот раздел, когда команды появятся или изменятся.)

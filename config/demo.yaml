@@ -1,8 +1,7 @@
 source: synthetic_jsonl          # в проде: company_db
-data_path: data/listings.jsonl
 
 cities: [Алматы, Астана]
-districts:                       # для генерации синтетики и, позже, промпта разбора
+districts:                       # справочник районов: генерация синтетики, схема и промпт разбора
   Алматы: [Алмалинский, Ауэзовский, Бостандыкский, Жетысуский, Медеуский, Наурызбайский, Турксибский, Алатауский]
   Астана: [Есильский, Алматинский, Сарыаркинский, Байконурский, Нура]
 
@@ -36,23 +35,12 @@ catalog:                         # новостройки (6.3): ЖК → ква
     view_premium: 1.05           # вид на горы или реку
     max_deviation: 0.10          # итоговая ставка — не дальше ±10% от коридора калибровки
 
-field_map:                       # поле источника → поле listings
-  price: price_kzt
-  room_count: rooms
-  text: description
-
-features:                        # ключ → как пишем в search_text
-  near_metro: рядом метро
-  parking: паркинг
-  mortgage: подходит под ипотеку
-  new_building: новостройка
-  near_school: рядом школа
-  furnished: с мебелью
+field_map: {}                    # поле источника → поле complexes / units; демо-JSONL уже в нужных полях
 
 models:
-  generator: claude-sonnet-5-5   # синтетика
+  generator: claude-sonnet-5-5   # тексты ЖК для синтетики
   parser: claude-haiku-5-5       # шаг 2
-  labeler: claude-opus-5-5       # разметка relevant для смысловых кейсов
+  labeler: claude-opus-5-5       # разметка relevant для смысловых кейсов (scripts/label_catalog.py)
   judge: claude-haiku-5-5        # судья в evals ответа: узкие проверки да/нет
 
 embeddings:

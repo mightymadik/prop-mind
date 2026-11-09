@@ -83,12 +83,10 @@ class AppConfig(BaseModel):
     """Несекретные настройки из config/*.yaml."""
 
     source: str
-    data_path: str
     catalog: CatalogConfig
     cities: list[str]
     districts: dict[str, list[str]]
     field_map: dict[str, str]
-    features: dict[str, str]
     models: dict[str, str]
     embeddings: EmbeddingsConfig
     rerank: RerankConfig

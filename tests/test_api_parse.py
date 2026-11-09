@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import main
-from app.schemas import SearchFilters
+from app.schemas import CatalogFilters
 
 client = TestClient(main.app)
 
@@ -16,7 +16,7 @@ def fresh_limits(monkeypatch):
 
 
 def test_parse_returns_filters(monkeypatch):
-    monkeypatch.setattr(main, "parse_query", lambda q, cfg, s: SearchFilters(city="Астана", rooms=[1]))
+    monkeypatch.setattr(main, "parse_catalog_query", lambda q, cfg, s: CatalogFilters(city="Астана", rooms=[1]))
     r = client.post("/parse", json={"query": "однушка в Астане"})
     assert r.status_code == 200
     assert r.json()["city"] == "Астана" and r.json()["rooms"] == [1]
@@ -31,7 +31,7 @@ def test_parse_llm_failure_is_502(monkeypatch):
     def boom(*a):
         raise RuntimeError("no structured output")
 
-    monkeypatch.setattr(main, "parse_query", boom)
+    monkeypatch.setattr(main, "parse_catalog_query", boom)
     r = client.post("/parse", json={"query": "двушка"})
     assert r.status_code == 502 and "RuntimeError" in r.json()["detail"]
 
@@ -89,7 +89,7 @@ def test_rate_limit_per_ip(monkeypatch):
 def test_budget_exhausted_blocks_before_models(monkeypatch):
     monkeypatch.setattr(main, "budget_left", lambda conn, cfg: False)
     monkeypatch.setattr(main, "run_search", lambda *a, **k: pytest.fail("models called"))
-    monkeypatch.setattr(main, "parse_query", lambda *a, **k: pytest.fail("models called"))
+    monkeypatch.setattr(main, "parse_catalog_query", lambda *a, **k: pytest.fail("models called"))
     for path in ("/search", "/parse"):
         r = client.post(path, json={"query": "двушка"})
         assert r.status_code == 429 and r.json()["detail"] == main.BUDGET_EXHAUSTED

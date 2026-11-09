@@ -94,3 +94,23 @@ def test_complex_search_text_puts_fields_before_description():
         "ЖК Тест, новостройка, комфорт-класс, Есильский район, Астана, застройщик Тест Строй, "
         "сдача 3 квартал 2027 года, рядом парк, рассрочка от застройщика. Двор без машин."
     )
+
+
+def test_stuffed_complex_description_stays_out_of_index():
+    from app.schemas import Complex
+    from app.search.text import build_complex_text
+
+    base = dict(
+        source_id="cx",
+        city="Алматы",
+        district="Медеуский",
+        name="Тест",
+        developer="Д",
+        housing_class="comfort",
+        completion_year=2027,
+        completion_quarter=3,
+    )
+    stuffed = Complex(**base, description="вид на горы, горы, панорама, горы, вид на горы")
+    assert build_complex_text(stuffed, CFG.catalog, CFG.moderation).endswith("сдача 3 квартал 2027 года. ")
+    plain = Complex(**base, description="Тихий двор.")
+    assert build_complex_text(plain, CFG.catalog, CFG.moderation).endswith("Тихий двор.")

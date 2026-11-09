@@ -12,16 +12,11 @@ from app.config import AppConfig, CatalogConfig
 from app.costs import record
 from app.llm.client import load_prompt
 from app.moderation import ContactFilter, strip_contacts
-from app.schemas import CatalogFilters, SearchFilters
+from app.schemas import CatalogFilters
 from app.search.catalog import ComplexHit
 
-PROMPT_FILE = "answer.md"
 REF = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")  # [3] и на всякий случай [1, 3]
-RELAX_TEXT = {"features": "признаки", "conditions": "состояние", "districts": "район"}
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
-
-# строка кандидата из listings: source_id, price_kzt, rooms, area_m2, district, condition, features, description
-Row = tuple
 
 
 @dataclass
@@ -38,28 +33,6 @@ class AnswerResult:
     total_ms: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
-
-
-def build_user_message(
-    query: str, filters: SearchFilters, relaxed: list[str], rows: list[Row], feature_labels: dict[str, str]
-) -> str:
-    shown = filters.model_dump(exclude_defaults=True, exclude={"semantic_query", "needs_clarification"})
-    lines = [
-        f"Запрос: {query}",
-        f"Условия запроса (фильтры, уже применены поиском): {shown or 'нет'}",
-        f"Смысловая часть (подтверждать описанием): {filters.semantic_query or 'нет'}",
-        "Ослаблено поиском: " + (", ".join(RELAX_TEXT.get(r, r) for r in relaxed) if relaxed else "ничего"),
-        "",
-        "Кандидаты:" if rows else "Кандидатов нет: поиск ничего не нашёл.",
-    ]
-    for n, (_, price, rooms, area, district, cond, feats, desc) in enumerate(rows, 1):
-        feats_txt = ", ".join(feature_labels.get(f, f) for f in feats) or "-"
-        lines.append(
-            f"[{n}] {price:,} ₸".replace(",", " ")
-            + f", {rooms or '-'} комн., {area or '-'} м², {district or '-'} р-н, {cond or '-'}, признаки: {feats_txt}"
-            + f"\n    <description>{quote_description(desc)}</description>"
-        )
-    return "\n".join(lines)
 
 
 CATALOG_PROMPT_FILE = "answer_catalog.md"
@@ -141,22 +114,6 @@ def resolve_refs(text: str, ids: list[str]) -> tuple[str, list[int], list[str]]:
         return "".join(out)
 
     return REF.sub(sub, text), invalid, cited
-
-
-def generate_answer(
-    query: str,
-    filters: SearchFilters,
-    relaxed: list[str],
-    rows: list[Row],
-    cfg: AppConfig,
-    api_key: str,
-    model: str | None = None,
-    on_text: Callable[[str], None] | None = None,
-    client: anthropic.Anthropic | None = None,
-) -> AnswerResult:
-    """Стримит ответ; on_text получает куски текста по мере генерации (для SSE). Ссылки проверяются в конце."""
-    message = build_user_message(query, filters, relaxed, rows, cfg.features)
-    return _generate(message, [r[0] for r in rows], PROMPT_FILE, cfg, api_key, model, on_text, client)
 
 
 def generate_catalog_answer(

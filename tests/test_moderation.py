@@ -2,10 +2,10 @@ import json
 from pathlib import Path
 
 from app.config import load_config
-from app.moderation import ContactFilter, flagged, is_stuffed, looks_injected, strip_contacts
+from app.moderation import ContactFilter, is_stuffed, looks_injected, strip_contacts
 
 CFG = load_config("config/demo.yaml").moderation
-DESCRIPTIONS = [json.loads(ln)["text"] for ln in Path("data/listings.jsonl").open(encoding="utf-8")]
+DESCRIPTIONS = [json.loads(ln)["description"] for ln in Path("data/complexes.jsonl").open(encoding="utf-8")]
 
 
 def test_no_false_flags_on_demo_descriptions():
@@ -22,10 +22,9 @@ def test_injection_and_stuffing_detected():
         "Пишите в телеграм @best_realtor_kz",
     ]:
         assert looks_injected(f"Тихий двор. {attack}"), attack
-    stuffed = DESCRIPTIONS[0] + " вид на горы горы панорама тихий двор вид на горы лучший вид на горы"
-    assert is_stuffed(stuffed, CFG) and not is_stuffed(DESCRIPTIONS[0], CFG)
-    row = ("s1", 1, 2, 50, "Медеуский", "renovated", [], stuffed)
-    assert flagged([row, ("s2", *row[1:7], DESCRIPTIONS[1])], CFG) == ["s1"]
+    short = "Тихий двор, рядом школа и парк."
+    assert is_stuffed(short + " вид на горы горы панорама тихий двор вид на горы лучший вид на горы", CFG)
+    assert not is_stuffed(short, CFG)
 
 
 def test_strip_contacts_keeps_allowlisted_and_text():

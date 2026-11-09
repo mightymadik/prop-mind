@@ -26,7 +26,7 @@ flowchart LR
     A --> U["chat page / widget<br/>streamed over SSE"]
 
     subgraph idx [offline indexing]
-      L[ListingSource adapter] --> I["sync_index.py<br/>search_text + voyage-3.5 embeddings"] --> DB[(Postgres + pgvector)]
+      L[CatalogSource adapter] --> I["sync_catalog.py<br/>complexes: search_text + voyage-3.5 embeddings"] --> DB[(Postgres + pgvector)]
     end
 ```
 
@@ -174,14 +174,15 @@ About 100 full answers per day fit into the demo's $2 daily budget.
 cp .env.example .env            # ANTHROPIC_API_KEY, VOYAGE_API_KEY
 docker compose up -d --build    # Postgres + pgvector, API on :8000 (Docker builds the chat page)
 uv sync
-uv run python scripts/sync_index.py --config config/demo.yaml   # index data/listings.jsonl (< $0.01 Voyage)
-curl localhost:8000/health      # "listings": 1048; chat: http://localhost:8000/chat
+uv run python scripts/migrate.py                                # tables for an existing database
+uv run python scripts/sync_catalog.py --config config/demo.yaml # index data/complexes.jsonl + units (< $0.01 Voyage)
+curl localhost:8000/health      # "complexes": 70; chat: http://localhost:8000/chat
 ```
 
 - New synthetic data (optional, calls Claude):
-  `uv run python scripts/generate_listings.py --config config/demo.yaml --count 2500`
+  `uv run python scripts/generate_catalog.py --config config/demo.yaml`
 - Tests: `uv run pytest`; chat page: `cd web/chat-app && npm ci && npm test && npm run typecheck`
-- Evals: `uv run python evals/run_evals.py --config config/demo.yaml --layer parse`
+- Evals: `uv run python evals/run_evals.py --repeats 3` (parsing)
   (also `search`, `answer`; see `--help`)
 - Server deploy (Oracle Cloud Always Free, Caddy + HTTPS): [deploy/oracle/README.md](deploy/oracle/README.md)
 

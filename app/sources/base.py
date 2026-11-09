@@ -2,12 +2,7 @@ from collections.abc import Iterable
 from datetime import datetime
 from typing import Protocol
 
-from app.schemas import Complex, Listing, Unit
-
-
-class ListingSource(Protocol):
-    def fetch_changed(self, since: datetime) -> Iterable[Listing]: ...  # новые и изменённые
-    def fetch_removed(self, since: datetime) -> Iterable[str]: ...  # source_id проданных и снятых
+from app.schemas import Complex, Unit
 
 
 class CatalogSource(Protocol):

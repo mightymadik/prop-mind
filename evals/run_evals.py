@@ -1,11 +1,14 @@
-"""Evals по evals/cases.jsonl, два слоя по отдельности.
+"""Evals новостроек по evals/cases_newbuild*.jsonl, слои по отдельности.
 
-parse  — SearchFilters от parse_query против expected_filters.
-search — поиск на эталонных expected_filters против relevant_source_ids: Recall@10, MRR.
+parse          — фильтры от парсера против expected_filters (доля полностью верных).
+search-catalog — лестница поиска по ЖК против relevant_source_ids: Recall@10, MRR.
+answer         — ответ на зафиксированной выдаче: проверки судьёй, чужие номера, цена, задержка.
 
-    python evals/run_evals.py --config config/demo.yaml                       # parse, dev
-    python evals/run_evals.py --config config/demo.yaml --layer search        # search, dev
-    python evals/run_evals.py --config config/demo.yaml --split holdout       # один раз, в конце
+    uv run python evals/run_evals.py --repeats 3                                   # parse, dev
+    uv run python evals/run_evals.py --split holdout --repeats 3                   # один раз, в конце
+    uv run python evals/run_evals.py --layer search-catalog --parsed-from <отчёт parse>
+    uv run python evals/run_evals.py --layer answer --cases split:dev --models claude-sonnet-5-5 --judge \
+        --parsed-from <отчёт parse>
 
 Отчёт: evals/results/<UTC-время>_<layer>_..._<split>.json
 """
@@ -27,14 +30,13 @@ from pydantic import BaseModel
 
 from app.config import get_settings, load_config
 from app.db import connect
-from app.llm.answer import CATALOG_RELAX_TEXT, cost_usd, generate_answer, generate_catalog_answer
+from app.llm.answer import CATALOG_RELAX_TEXT, cost_usd, generate_catalog_answer
 from app.llm.client import PROMPTS_DIR, call_structured, load_prompt
-from app.llm.parser import CATALOG_PROMPT_FILE, PROMPT_FILE, parse_catalog_query, parse_query
-from app.pipeline import retrieve, retrieve_catalog
-from app.schemas import CatalogFilters, SearchFilters
+from app.llm.parser import CATALOG_PROMPT_FILE, parse_catalog_query
+from app.pipeline import retrieve_catalog
+from app.schemas import CatalogFilters
 from app.search import catalog
 from app.search.embeddings import embed, to_pgvector
-from app.search.hybrid import query_text, search, where_from_filters
 from app.search.rerank import rerank_ids
 
 ROOT = Path(__file__).resolve().parent
@@ -55,15 +57,14 @@ def _quarter(d: dict) -> dict:
     return d
 
 
-def compare_filters(got: SearchFilters | CatalogFilters, case: dict) -> dict[str, bool]:
+def compare_filters(got: CatalogFilters, case: dict) -> dict[str, bool]:
     """Поле → совпало ли. Проверяются только поля, которые надо проверять в этом кейсе."""
     expected = case["expected_filters"]
     if expected.get("needs_clarification"):
         return {"needs_clarification": bool(got.needs_clarification)}
 
-    model = CatalogFilters if isinstance(got, CatalogFilters) else SearchFilters
-    fields = [f for f in model.model_fields if f not in ("semantic_query", "needs_clarification")]
-    defaults = model().model_dump()
+    fields = [f for f in CatalogFilters.model_fields if f not in ("semantic_query", "needs_clarification")]
+    defaults = CatalogFilters().model_dump()
     g = _quarter(got.model_dump())
     e = _quarter({f: expected.get(f, defaults[f]) for f in fields})
     checks = {f: _norm(g[f]) == _norm(e[f]) for f in fields}
@@ -108,22 +109,22 @@ def summarize(cases: list[dict]) -> dict:
     }
 
 
-def run_case(case: dict, cfg, settings, catalog: bool = False) -> dict:
+def run_case(case: dict, cfg, settings) -> dict:
     t = time.perf_counter()
     try:
-        got = (parse_catalog_query if catalog else parse_query)(case["query"], cfg, settings)
+        got = parse_catalog_query(case["query"], cfg, settings)
         error = None
     except Exception as e:  # noqa: BLE001 — упавший прогон = неверный, eval продолжается
         got, error = None, f"{e.__class__.__name__}: {e}"
     latency = int((time.perf_counter() - t) * 1000)
     checks = compare_filters(got, case) if got else {"error": False}
-    defaults = (CatalogFilters if catalog else SearchFilters)().model_dump()
+    defaults = CatalogFilters().model_dump()
     return {
         "ok": all(checks.values()),
         "checks": checks,
         "error": error,
         "latency_ms": latency,
-        # относительно SearchFilters: у схемы для LLM дефолтов нет, exclude_defaults не сработал бы
+        # относительно CatalogFilters: у схемы для LLM дефолтов нет, exclude_defaults не сработал бы
         "got": {k: v for k, v in got.model_dump().items() if _norm(v) != _norm(defaults[k])} if got else None,
     }
 
@@ -136,38 +137,8 @@ def search_metrics(ranked: list[str], relevant: list[str], k: int = K) -> dict:
     return {"hits": hits, "recall": round(hits / min(len(relevant), k), 3), "rr": round(rr, 3)}
 
 
-def ranking_matters(case: dict, n_candidates: int) -> bool:
-    """Есть смысловые требования и под фильтры больше k объектов — порядок решает, что попадёт в топ."""
-    return case["semantic"] == "required" and n_candidates > K
-
-
-def summarize_search(results: list[dict]) -> dict:
-    scored = [r for r in results if r["n_relevant"] > 0]
-
-    def agg(rs: list[dict]) -> dict:
-        if not rs:
-            return {"n": 0, "recall_at_10": None, "mrr": None}
-        return {
-            "n": len(rs),
-            "recall_at_10": round(statistics.fmean(r["recall"] for r in rs), 3),
-            "mrr": round(statistics.fmean(r["rr"] for r in rs), 3),
-        }
-
-    tags = sorted({t for r in scored for t in r["tags"]})
-    lat = sorted(r["latency_ms"] for r in results)
-    return {
-        "cases": len(results),
-        **agg(scored),
-        "by_group": {g: agg([r for r in scored if r["group"] == g]) for g in ("ranking", "other")},
-        "by_tag": {t: agg([r for r in scored if t in r["tags"]]) for t in tags},
-        "empty_relevant": [r["id"] for r in results if r["n_relevant"] == 0],
-        "sql_latency_ms": {"p50": int(statistics.median(lat)), "p95": lat[min(len(lat) - 1, int(len(lat) * 0.95))]},
-    }
-
-
-def load_cases(split: str, catalog: bool = False) -> list[dict]:
-    path = CATALOG_CASES[split] if catalog else ROOT / "cases.jsonl"
-    cases = [json.loads(line) for line in path.open(encoding="utf-8") if line.strip()]
+def load_cases(split: str) -> list[dict]:
+    cases = [json.loads(line) for line in CATALOG_CASES[split].open(encoding="utf-8") if line.strip()]
     cases = [c for c in cases if c["split"] == split]
     if not cases:
         raise SystemExit(f"no cases with split={split}")
@@ -210,22 +181,6 @@ def embed_queries(texts: list[str], cfg, settings, cache_path: Path | None = Non
 
 
 RERANK_CACHE = ROOT / "rerank_cache.jsonl"
-BASE_MODES = ("vector", "hybrid")
-
-
-def search_mode(value: str) -> str:
-    """vector | hybrid | rerank:<модель> (гибрид, затем реранкер этой модели)."""
-    if value in BASE_MODES or (value.startswith("rerank:") and len(value) > len("rerank:")):
-        return value
-    raise argparse.ArgumentTypeError(f"режим {value!r}: vector, hybrid или rerank:<модель>")
-
-
-def search_variant(value: str) -> str:
-    """<gold|parsed>/<метод>: сочетание источника фильтров и метода поиска."""
-    src, _, mode = value.partition("/")
-    if src not in ("gold", "parsed"):
-        raise argparse.ArgumentTypeError(f"вариант {value!r}: источник gold или parsed")
-    return f"{src}/{search_mode(mode)}"
 
 
 class RerankCache:
@@ -252,271 +207,6 @@ class RerankCache:
                 row = {"model": model, "query": query, "candidates": candidates, "order": self.data[k]}
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
         return self.data[k]
-
-
-def run_search_mode(conn, mode: str, f: SearchFilters, vec: str, text: str, cfg, settings, cache: RerankCache):
-    if not mode.startswith("rerank:"):
-        return search(conn, f, vec, text, mode)
-    ranked, relaxed = search(conn, f, vec, text, "hybrid")
-    model, n = mode.removeprefix("rerank:"), cfg.rerank.candidates
-    head = cache.get_or_compute(
-        model, text, ranked[:n], lambda: rerank_ids(conn, ranked[:n], text, cfg.rerank, settings.voyage_api_key, model)
-    )
-    return head + ranked[n:], relaxed
-
-
-def relaxed_filters(f: SearchFilters, relaxed: list[str]) -> SearchFilters:
-    return f.model_copy(update={k: [] if k == "features" else None for k in relaxed})
-
-
-def run_relax(args, cfg, settings) -> None:
-    """Набор relax: строгие фильтры дают 0. Проверяем, что сняты ровно ожидаемые мягкие фильтры
-    и что весь топ-10 проходит оставшиеся фильтры."""
-    cases = load_cases("relax")
-    filters = {c["id"]: SearchFilters.model_validate(c["expected_filters"]) for c in cases}
-    texts = [query_text(filters[c["id"]], c["query"]) for c in cases]
-    vecs = embed_queries(texts, cfg, settings)
-    by_mode: dict[str, list[dict]] = {m: [] for m in args.modes}
-    with connect() as conn:
-        for c, vec, text in zip(cases, vecs, texts, strict=True):
-            f = filters[c["id"]]
-            for mode in args.modes:
-                ranked, relaxed = search(conn, f, vec, text, mode)
-                top = ranked[:K]
-                where, params = where_from_filters(relaxed_filters(f, relaxed))
-                ok_rows = conn.execute(
-                    f"SELECT count(*) FROM listings WHERE source_id = ANY(%(top)s) AND {where}", {**params, "top": top}
-                ).fetchone()[0]
-                by_mode[mode].append(
-                    {
-                        "id": c["id"],
-                        "query": c["query"],
-                        "expected_relaxed": c["expected_relaxed"],
-                        "relaxed": relaxed,
-                        "relaxed_ok": relaxed == c["expected_relaxed"],
-                        "n_results": len(ranked),
-                        "top_respects_remaining": bool(top) and ok_rows == len(top),
-                        "top10": top,
-                    }
-                )
-    now = datetime.now(UTC)
-    summary = {
-        m: {
-            "cases": len(rs),
-            "relaxed_ok": sum(r["relaxed_ok"] for r in rs),
-            "top_respects_remaining": sum(r["top_respects_remaining"] for r in rs),
-        }
-        for m, rs in by_mode.items()
-    }
-    report = {
-        "layer": "relax",
-        "modes": args.modes,
-        "date": now.isoformat(timespec="seconds"),
-        "summary": summary,
-        "results": by_mode,
-    }
-    out = ROOT / "results" / f"{now:%Y%m%dT%H%M%SZ}_relax_{'+'.join(args.modes)}.json"
-    out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-    for m, rs in by_mode.items():
-        s = summary[m]
-        print(
-            f"relax/{m}: снято верно {s['relaxed_ok']}/{s['cases']}, "
-            f"топ-10 проходит оставшиеся фильтры {s['top_respects_remaining']}/{s['cases']}"
-        )
-        for r in rs:
-            flag = "ok " if r["relaxed_ok"] and r["top_respects_remaining"] else "FAIL"
-            print(
-                f"  {flag} {r['id']} снято {r['relaxed']} (ждали {r['expected_relaxed']}), результатов {r['n_results']}"
-            )
-    print(f"report: {out.relative_to(ROOT.parent)}")
-
-
-def unjudged(top: list[str], case: dict, passes_gold: set[str]) -> list[str]:
-    """Объекты топа, проходящие эталонные фильтры, но ещё не оценённые: их релевантность неизвестна.
-
-    Объект, не проходящий эталонные фильтры (ошибка парсера в сквозном прогоне), заведомо не подходит —
-    нарушено явное условие запроса, — поэтому неразмеченным не считается.
-    """
-    judged = set(case.get("judged_source_ids", []))
-    return [x for x in top if x not in judged and x in passes_gold]
-
-
-def parse_all(cases: list[dict], cfg, settings, workers: int) -> dict[str, SearchFilters | str]:
-    """id кейса → фильтры от парсера, либо текст ошибки."""
-
-    def one(c: dict) -> SearchFilters | str:
-        try:
-            return parse_query(c["query"], cfg, settings)
-        except Exception as e:  # noqa: BLE001 — упавший разбор = промах кейса, прогон продолжается
-            return f"{e.__class__.__name__}: {e}"
-
-    with ThreadPoolExecutor(workers) as pool:
-        return dict(zip((c["id"] for c in cases), pool.map(one, cases), strict=True))
-
-
-def parsed_from_report(report: dict) -> dict[str, SearchFilters | str]:
-    """Фильтры от парсера из прошлого прогона: парсер недетерминирован (формулировка semantic_query
-    плавает), а сравнение методов и дооценка должны идти на одних и тех же фильтрах."""
-    key = next(k for k in report["results"] if k.startswith("parsed/"))
-    return {
-        r["id"]: SearchFilters.model_validate(r["filters"]) if isinstance(r["filters"], dict) else r["filters"]
-        for r in report["results"][key]
-    }
-
-
-def run_search(args, cfg, settings) -> None:
-    """Все методы (--modes) × источники фильтров (--filters) в одном прогоне, на одной разметке.
-
-    gold — эталонные expected_filters: качество поиска отдельно от разбора.
-    parsed — фильтры от parse_query, как в реальном запросе: сквозной прогон.
-    """
-    cases = [c for c in load_cases(args.split) if "relevant_source_ids" in c]
-    gold = {c["id"]: SearchFilters.model_validate(c["expected_filters"]) for c in cases}
-    variants = args.variants or [f"{src}/{m}" for src in args.filters for m in args.modes]
-    args.filters = list(dict.fromkeys(v.split("/", 1)[0] for v in variants))
-    sources: dict[str, dict[str, SearchFilters | str]] = {}
-    if "gold" in args.filters:
-        sources["gold"] = dict(gold)
-    if "parsed" in args.filters:
-        if args.parsed_from:
-            frozen = {}
-            for path in args.parsed_from:
-                frozen |= parsed_from_report(json.loads(path.read_text(encoding="utf-8")))
-            missing = [c["id"] for c in cases if c["id"] not in frozen]
-            if missing:
-                raise SystemExit(f"в {args.parsed_from} нет разбора для {missing}")
-            sources["parsed"] = {c["id"]: frozen[c["id"]] for c in cases}
-        else:
-            sources["parsed"] = parse_all(cases, cfg, settings, args.workers)
-
-    texts = {
-        (src, c["id"]): query_text(f, c["query"]) if isinstance(f := sources[src][c["id"]], SearchFilters) else ""
-        for src in sources
-        for c in cases
-    }
-    uniq = sorted({t for t in texts.values() if t})
-    vec_of = dict(zip(uniq, embed_queries(uniq, cfg, settings), strict=True))
-
-    by_mode: dict[str, list[dict]] = {v: [] for v in variants}
-    rerank_cache = RerankCache(RERANK_CACHE)
-    with connect() as conn:
-        for c in cases:
-            g_where, g_params = where_from_filters(gold[c["id"]])
-            n_candidates = conn.execute(f"SELECT count(*) FROM listings WHERE {g_where}", g_params).fetchone()[0]
-            relevant = c["relevant_source_ids"]
-            for src, fs in sources.items():
-                f = fs[c["id"]]
-                parsed_ok = None
-                if src == "parsed":
-                    parsed_ok = isinstance(f, SearchFilters) and all(compare_filters(f, c).values())
-                for mode in (v.split("/", 1)[1] for v in variants if v.startswith(src + "/")):
-                    clarified = not isinstance(f, SearchFilters) or bool(f.needs_clarification)
-                    t = time.perf_counter()
-                    if clarified:  # парсер переспросил или упал — выдачи нет
-                        ranked, relaxed = [], []
-                    else:
-                        text = texts[(src, c["id"])]
-                        ranked, relaxed = run_search_mode(
-                            conn, mode, f, vec_of[text], text, cfg, settings, rerank_cache
-                        )
-                    latency = int((time.perf_counter() - t) * 1000)
-                    top = ranked[:K]
-                    passes_gold = {
-                        r[0]
-                        for r in conn.execute(
-                            f"SELECT source_id FROM listings WHERE source_id = ANY(%(top)s) AND {g_where}",
-                            {**g_params, "top": top},
-                        )
-                    }
-                    by_mode[f"{src}/{mode}"].append(
-                        {
-                            "id": c["id"],
-                            "query": c["query"],
-                            "tags": c["tags"],
-                            "relevance": c.get("relevance"),
-                            "group": "ranking" if ranking_matters(c, n_candidates) else "other",
-                            "n_candidates": n_candidates,
-                            "n_relevant": len(relevant),
-                            "latency_ms": latency,
-                            **(
-                                search_metrics(ranked, relevant)
-                                if relevant
-                                else {"hits": 0, "recall": None, "rr": None}
-                            ),
-                            "filters": f.model_dump(exclude_defaults=True) if isinstance(f, SearchFilters) else f,
-                            "parsed_ok": parsed_ok,
-                            "clarified": clarified,
-                            "relaxed": relaxed,
-                            "top_outside_gold": len(top) - len(passes_gold),
-                            "unjudged_top10": unjudged(top, c, passes_gold),
-                            "top10": top,
-                        }
-                    )
-
-    summaries = {}
-    for mode, results in by_mode.items():
-        summaries[mode] = summarize_search(results)
-        summaries[mode]["unjudged_at_10"] = {r["id"]: len(r["unjudged_top10"]) for r in results if r["unjudged_top10"]}
-    now = datetime.now(UTC)
-    report = {
-        "layer": "search",
-        "modes": args.modes,
-        "filters": args.filters,
-        "parsed_from": [str(p) for p in args.parsed_from] if args.parsed_from else None,
-        "split": args.split,
-        "date": now.isoformat(timespec="seconds"),
-        "config": args.config,
-        "embeddings": cfg.embeddings.model_dump(),
-        "summary": summaries,
-        "results": by_mode,
-    }
-    tag = (
-        "+".join(v.replace("/", "-") for v in args.variants)
-        if args.variants
-        else "+".join(args.modes) + ("" if args.filters == ["gold"] else "_" + "+".join(args.filters))
-    )
-    out = ROOT / "results" / f"{now:%Y%m%dT%H%M%SZ}_search_{tag}_{args.split}.json"
-    out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-
-    def line(name: str, a: dict) -> str:
-        if not a["n"]:
-            return f"  {name:22} n=0"
-        return f"  {name:22} n={a['n']:<3} Recall@10 {a['recall_at_10']:.0%}  MRR {a['mrr']:.2f}"
-
-    for mode, results in by_mode.items():
-        summary = summaries[mode]
-        print(
-            f"search/{mode}/{args.split}: {summary['cases']} cases, "
-            f"SQL p50 {summary['sql_latency_ms']['p50']} ms, p95 {summary['sql_latency_ms']['p95']} ms"
-        )
-        print(line("all", summary))
-        for g, a in summary["by_group"].items():
-            print(line(f"group {g}", a))
-        if args.verbose:
-            for t, a in summary["by_tag"].items():
-                print(line(f"tag {t}", a))
-        for r in results:
-            if r["recall"] is not None and r["recall"] < 1:
-                print(
-                    f"  MISS {r['id']} [{r['group']}] recall {r['recall']:.0%} rr {r['rr']:.2f} "
-                    f"({r['hits']}/{min(r['n_relevant'], K)}, candidates {r['n_candidates']})"
-                )
-        if mode.startswith("parsed/"):
-            print(
-                f"  разбор полностью верен: {sum(bool(r['parsed_ok']) for r in results)}/{len(results)}, "
-                f"переспросил: {[r['id'] for r in results if r['clarified']] or 'нет'}, "
-                f"объектов вне эталонных фильтров в топ-10: {sum(r['top_outside_gold'] for r in results)}"
-            )
-        if summary["unjudged_at_10"]:
-            total = sum(summary["unjudged_at_10"].values())
-            print(f"  НЕРАЗМЕЧЕННЫХ в топ-10: {total} — {summary['unjudged_at_10']} (дооценка: llm_label.py extend)")
-        if summary["empty_relevant"]:
-            print(f"  без подходящих (не в среднем): {', '.join(summary['empty_relevant'])}")
-    print(f"report: {out.relative_to(ROOT.parent)}")
-
-
-ANSWER_CASES = ["d15", "d17", "d22", "d27", "d29", "d30", "r01", "d16", "h06", "h07"]
-NO_MATCH_CASES = {"d16", "h06", "h07"}  # подходящих по смыслу нет: ответ должен честно это сказать
 
 
 def pct(values: list[int], q: float) -> int:
@@ -601,8 +291,6 @@ class Verdict(BaseModel):
     reason: str
 
 
-RELAX_RU = {"features": "признаки", "conditions": "состояние", "districts": "район"}
-# обратная проверка — по тексту, не судьёй: на отрицательном критерии («НЕ утверждает») судья ошибался
 NO_MATCH_CLAIM = re.compile(r"(полностью\s+)?подходящих\s+(вариантов\s+|объектов\s+)?нет|ничего\s+не\s+подходит", re.I)
 
 
@@ -623,13 +311,11 @@ def answer_checks(row: dict, case: dict) -> dict[str, str]:
     """Какие критерии проверять судьёй для этого ответа: имя → текст критерия."""
     checks = {}
     if row["relaxed"]:
-        snyato = ", ".join(RELAX_RU.get(x, CATALOG_RELAX_TEXT.get(x, x)) for x in row["relaxed"])
+        snyato = ", ".join(CATALOG_RELAX_TEXT.get(x, x) for x in row["relaxed"])
         checks["mentions_relaxation"] = (
             f"Ответ явно сообщает, что поиск ослабил условия запроса, и называет, какие именно: {snyato}."
         )
-    no_match = row["id"] in NO_MATCH_CASES or (
-        case.get("relevance") in ("manual", "llm_reviewed") and case.get("relevant_source_ids") == []
-    )
+    no_match = case.get("relevance") in ("manual", "llm_reviewed") and case.get("relevant_source_ids") == []
     if no_match:
         checks["states_no_match"] = (
             "Первая фраза ответа — «Полностью подходящих нет: …» (или дословно близкая) и после двоеточия "
@@ -649,7 +335,7 @@ def answer_checks(row: dict, case: dict) -> dict[str, str]:
 
 def judge(check: str, query: str, row: dict, text: str, cfg, settings) -> Verdict:
     # по-русски: служебные ключи (features) судья принимал за требование назвать их дословно
-    relaxed = ", ".join(RELAX_RU.get(x, x) for x in row["relaxed"]) or "ничего"
+    relaxed = ", ".join(CATALOG_RELAX_TEXT.get(x, x) for x in row["relaxed"]) or "ничего"
     context = f"Поиск ослабил условия: {relaxed}; кандидатов: {len(row['ids'])}"
     return call_structured(
         api_key=settings.anthropic_api_key,
@@ -669,8 +355,9 @@ def expand_cases(tokens: list[str], all_cases: dict[str, dict]) -> list[str]:
     return out
 
 
-def cached_retrieval_fns(cfg, settings, table: str = "listings"):
-    """embed_fn / rerank_fn для retrieve() поверх кэшей evals: прогоны воспроизводимы, лимит Voyage не мешает."""
+def cached_retrieval_fns(cfg, settings):
+    """embed_fn / rerank_fn для retrieve_catalog() поверх кэшей evals: прогоны воспроизводимы,
+    лимит Voyage не мешает."""
     cache = RerankCache(RERANK_CACHE)
     model, n = cfg.rerank.model, cfg.rerank.candidates
 
@@ -682,7 +369,7 @@ def cached_retrieval_fns(cfg, settings, table: str = "listings"):
             model,
             text,
             ids[:n],
-            lambda: rerank_ids(conn, ids[:n], text, cfg.rerank, settings.voyage_api_key, table=table),
+            lambda: rerank_ids(conn, ids[:n], text, cfg.rerank, settings.voyage_api_key),
         )
         return head + ids[n:]
 
@@ -692,31 +379,27 @@ def cached_retrieval_fns(cfg, settings, table: str = "listings"):
 def run_answer(args, cfg, settings) -> None:
     """Ответ на одинаковых выдачах для каждой модели из --models. Тексты — в файл на проверку человеку,
     в консоль — только цифры и вердикты судьи (в наборе могут быть holdout-кейсы)."""
-    path = CATALOG_CASES["dev"] if args.catalog else ROOT / "cases.jsonl"
-    all_cases = {c["id"]: c for c in (json.loads(ln) for ln in path.open(encoding="utf-8") if ln.strip())}
+    all_cases = {c["id"]: c for c in load_cases("dev")}
     case_ids = expand_cases(args.cases, all_cases)
     frozen: dict = {}
     for p in args.parsed_from or []:
-        report = json.loads(p.read_text(encoding="utf-8"))
-        frozen |= catalog_filters_from_report(report) if args.catalog else parsed_from_report(report)
-    embed_fn, rerank_fn = cached_retrieval_fns(cfg, settings, table="complexes" if args.catalog else "listings")
-    model_cls, retrieve_fn = (CatalogFilters, retrieve_catalog) if args.catalog else (SearchFilters, retrieve)
-    answer_fn = generate_catalog_answer if args.catalog else generate_answer
+        frozen |= catalog_filters_from_report(json.loads(p.read_text(encoding="utf-8")))
+    embed_fn, rerank_fn = cached_retrieval_fns(cfg, settings)
     results = []
     with connect() as conn:
         for cid in case_ids:
             c = all_cases[cid]
             f = frozen.get(cid)
-            r = retrieve_fn(
+            r = retrieve_catalog(
                 conn,
                 c["query"],
                 cfg,
                 settings,
-                filters=f if isinstance(f, model_cls) else None,
+                filters=f if isinstance(f, CatalogFilters) else None,
                 embed_fn=embed_fn,
                 rerank_fn=rerank_fn,
             )
-            shown = [h.complex["source_id"] for h in r.hits] if args.catalog else [x[0] for x in r.rows]
+            shown = [h.complex["source_id"] for h in r.hits]
             row = {
                 "id": cid,
                 "split": c["split"],
@@ -731,8 +414,9 @@ def run_answer(args, cfg, settings) -> None:
             row["no_match"] = "states_no_match" in answer_checks(row, c)
             if not r.clarification:
                 for m in args.models:
-                    found = r.hits if args.catalog else r.rows
-                    a = answer_fn(c["query"], r.filters, r.relaxed, found, cfg, settings.anthropic_api_key, m)
+                    a = generate_catalog_answer(
+                        c["query"], r.filters, r.relaxed, r.hits, cfg, settings.anthropic_api_key, m
+                    )
                     entry = {**a.__dict__, "cost_usd": round(cost_usd(a, cfg), 6), "checks": {}}
                     if args.judge:
                         for name, check in answer_checks(row, c).items():
@@ -800,9 +484,7 @@ def run_answer(args, cfg, settings) -> None:
 def run_answer_judge(args, cfg, settings) -> None:
     """Перепроверка судьёй готового отчёта answer — без повторной генерации ответов. Пишет новый отчёт."""
     report = json.loads(args.report.read_text(encoding="utf-8"))
-    all_cases = {
-        c["id"]: c for c in (json.loads(ln) for ln in (ROOT / "cases.jsonl").open(encoding="utf-8") if ln.strip())
-    }
+    all_cases = {c["id"]: c for c in load_cases("dev")}
     totals: dict[str, dict[str, list[bool]]] = {}
     for row in report["results"]:
         for m, a in row["answers"].items():
@@ -847,57 +529,26 @@ def main() -> None:
     ap.add_argument(
         "--layer",
         default="parse",
-        choices=[
-            "parse",
-            "search",
-            "search-catalog",
-            "relax",
-            "answer",
-            "answer-judge",
-            "answer-review",
-            "answer-reveal",
-        ],
+        choices=["parse", "search-catalog", "answer", "answer-judge", "answer-review", "answer-reveal"],
     )
     ap.add_argument("--report", type=Path, help="answer-review: отчёт answer, из которого собрать слепой файл")
     ap.add_argument("--review", type=Path, help="answer-reveal: заполненный файл оценки")
-    ap.add_argument("--cases", nargs="+", default=ANSWER_CASES, help="answer: id кейсов или split:<набор>")
+    ap.add_argument("--cases", nargs="+", default=["split:dev"], help="answer: id кейсов или split:<набор>")
     ap.add_argument("--judge", action="store_true", help="answer: проверка судьёй (ослабление, «подходящих нет»)")
     ap.add_argument("--tag", help="answer: метка в имени отчёта")
     ap.add_argument("--models", nargs="+", default=["claude-sonnet-5-5", "claude-haiku-5-5"], help="answer: модели")
     ap.add_argument(
-        "--modes",
-        nargs="+",
-        type=search_mode,
-        default=["vector", "hybrid"],
-        help="search: vector, hybrid, rerank:<модель> (например rerank:rerank-3)",
-    )
-    ap.add_argument("--verbose", action="store_true", help="search: разбивка по тегам")
-    ap.add_argument(
-        "--filters", nargs="+", default=["gold"], choices=["gold", "parsed"], help="search: источник фильтров"
-    )
-    ap.add_argument(
         "--parsed-from", type=Path, nargs="+", help="search/answer: взять фильтры от парсера из этих отчётов"
-    )
-    ap.add_argument(
-        "--variants",
-        nargs="+",
-        type=search_variant,
-        help="search: только эти сочетания источник/метод, например gold/vector parsed/rerank:rerank-2.5",
     )
     ap.add_argument("--split", default="dev", choices=["dev", "holdout"])
     ap.add_argument("--repeats", type=int, default=1, help="parse: прогонов на кейс, оценка разброса")
     ap.add_argument("--workers", type=int, default=4)
-    ap.add_argument("--catalog", action="store_true", help="parse/answer: новостройки (cases_newbuild*.jsonl)")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
     settings = get_settings()
-    if args.layer == "search":
-        run_search(args, cfg, settings)
-    elif args.layer == "search-catalog":
+    if args.layer == "search-catalog":
         run_catalog_search(args, cfg, settings)
-    elif args.layer == "relax":
-        run_relax(args, cfg, settings)
     elif args.layer == "answer":
         run_answer(args, cfg, settings)
     elif args.layer == "answer-judge":
@@ -910,7 +561,7 @@ def main() -> None:
         run_parse(args, cfg, settings)
 
 
-CATALOG_LADDER = [  # (имя, фильтры, текст, метод) — как лестница на объявлениях (decisions.md, «Сводка поиска»)
+CATALOG_LADDER = [  # (имя, фильтры, текст, метод) — та же лестница, что была на объявлениях (decisions.md)
     ("векторы по всему запросу", "gold", "query", "vector"),
     ("+ гибрид (векторы + полнотекстовый, RRF)", "gold", "query", "hybrid"),
     ("векторы по смысловой части", "parsed", "semantic", "vector"),
@@ -930,7 +581,7 @@ def catalog_filters_from_report(report: dict) -> dict[str, CatalogFilters | str]
 
 def run_catalog_search(args, cfg, settings) -> None:
     """Лестница поиска по ЖК на размеченных смысловых кейсах: Recall@10 и MRR по шагам."""
-    cases = [c for c in load_cases(args.split, catalog=True) if "relevant_source_ids" in c]
+    cases = [c for c in load_cases(args.split) if "relevant_source_ids" in c]
     if not args.parsed_from:
         raise SystemExit("нужен --parsed-from <отчёт parse_catalog>: фильтры парсера фиксируются по прогону")
     parsed = catalog_filters_from_report(json.loads(args.parsed_from[0].read_text(encoding="utf-8")))
@@ -1003,11 +654,11 @@ def run_catalog_search(args, cfg, settings) -> None:
 
 
 def run_parse(args, cfg, settings) -> None:
-    cases = load_cases(args.split, args.catalog)
+    cases = load_cases(args.split)
 
     jobs = [c for c in cases for _ in range(args.repeats)]
     with ThreadPoolExecutor(args.workers) as pool:
-        runs = list(pool.map(lambda c: run_case(c, cfg, settings, args.catalog), jobs))
+        runs = list(pool.map(lambda c: run_case(c, cfg, settings), jobs))
     results = []
     for i, c in enumerate(cases):
         rs = runs[i * args.repeats : (i + 1) * args.repeats]
@@ -1024,7 +675,7 @@ def run_parse(args, cfg, settings) -> None:
         )
 
     summary = summarize(results)
-    prompt_file = CATALOG_PROMPT_FILE if args.catalog else PROMPT_FILE
+    prompt_file = CATALOG_PROMPT_FILE
     prompt = (PROMPTS_DIR / prompt_file).read_bytes()
     now = datetime.now(UTC)
     report = {
@@ -1038,7 +689,7 @@ def run_parse(args, cfg, settings) -> None:
         "summary": summary,
         "results": results,
     }
-    kind = "parse_catalog" if args.catalog else "parse"
+    kind = "parse_catalog"
     out = ROOT / "results" / f"{now:%Y%m%dT%H%M%SZ}_{kind}_{args.split}_x{args.repeats}.json"
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 

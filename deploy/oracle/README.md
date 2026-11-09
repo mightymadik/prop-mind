@@ -55,20 +55,16 @@ docker compose logs -f caddy   # дождись «certificate obtained»
 
 ## 4. Данные
 
-Вариант А — **перенести базу с Mac** (без новых вызовов Voyage, те же эмбеддинги, что в evals):
+ЖК и квартиры лежат в репозитории (`data/complexes.jsonl`, `data/units.jsonl`); на VM их нужно только
+проиндексировать (~70 эмбеддингов Voyage, меньше $0,01):
 
 ```bash
-# на Mac, из корня проекта
-docker compose exec -T db pg_dump -U prop -d prop --data-only -t listings | gzip > listings.sql.gz
-scp listings.sql.gz ubuntu@<IP>:~/
-# на VM
-gunzip -c ~/listings.sql.gz | docker compose exec -T db psql -U prop -d prop
+docker compose exec api python scripts/migrate.py                              # таблицы complexes / units
+docker compose exec api python scripts/sync_catalog.py --config config/demo.yaml
 ```
 
-Вариант Б — **пересчитать на VM** (~125 тыс. токенов Voyage, меньше $0,01):
-`docker compose exec api python scripts/sync_index.py --config config/demo.yaml`.
-
-Проверка: `curl https://$DOMAIN/health` → `"db": "ok", "listings": 1048`.
+Проверка: `curl https://$DOMAIN/health` → `"db": "ok", "complexes": 70, "free_units": 2058`.
+Пустая база (`"complexes": 0`) — поиск ничего не находит, ошибок в логах при этом нет (decisions.md, деплой).
 
 ## 5. Обслуживание
 
