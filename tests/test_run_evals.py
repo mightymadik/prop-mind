@@ -1,4 +1,4 @@
-from app.schemas import CatalogFilters as SearchFilters
+from app.schemas import SearchFilters
 from evals.run_evals import compare_filters, summarize
 
 
@@ -70,15 +70,15 @@ def test_summarize_single_repeat_has_zero_spread():
 
 def test_run_case_reports_got_without_defaults(monkeypatch):
     from app.config import Settings, load_config
-    from app.schemas import build_catalog_parser_schema
+    from app.schemas import build_parser_schema
     from evals import run_evals
 
     cfg = load_config("config/demo.yaml")
     empty = {k: v for k, v in SearchFilters().model_dump().items()}
     monkeypatch.setattr(
         run_evals,
-        "parse_catalog_query",
-        lambda q, c, s: build_catalog_parser_schema(cfg)(**{**empty, "city": "Алматы"}),
+        "parse_query",
+        lambda q, c, s: build_parser_schema(cfg)(**{**empty, "city": "Алматы"}),
     )
     r = run_evals.run_case({"query": "q", "expected_filters": {"city": "Алматы"}, "semantic": "empty"}, cfg, Settings())
     assert r["ok"] and r["got"] == {"city": "Алматы"}
@@ -249,18 +249,18 @@ def test_claims_no_match_phrases():
 
 
 def test_catalog_compare_treats_year_without_quarter_as_q4():
-    from app.schemas import CatalogFilters
+    from app.schemas import SearchFilters
 
     c = {"expected_filters": {"city": "Алматы", "completion_max_year": 2027}, "semantic": "empty"}
-    got = CatalogFilters(city="Алматы", completion_max_year=2027, completion_max_quarter=4)
+    got = SearchFilters(city="Алматы", completion_max_year=2027, completion_max_quarter=4)
     assert all(compare_filters(got, c).values())
     assert compare_filters(got.model_copy(update={"completion_max_quarter": 2}), c)["completion_max_quarter"] is False
     assert compare_filters(got.model_copy(update={"views": ["river"]}), c)["views"] is False  # лишний фильтр
 
 
 def test_catalog_filters_from_parse_report():
-    from app.schemas import CatalogFilters
-    from evals.run_evals import catalog_filters_from_report
+    from app.schemas import SearchFilters
+    from evals.run_evals import filters_from_report
 
     report = {
         "results": [
@@ -268,5 +268,5 @@ def test_catalog_filters_from_parse_report():
             {"id": "n02", "runs": [{"got": None, "error": "RuntimeError: x"}]},
         ]
     }
-    out = catalog_filters_from_report(report)
-    assert out["n01"] == CatalogFilters(city="Астана", rooms=[2]) and out["n02"] == "RuntimeError: x"
+    out = filters_from_report(report)
+    assert out["n01"] == SearchFilters(city="Астана", rooms=[2]) and out["n02"] == "RuntimeError: x"

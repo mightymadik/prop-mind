@@ -12,7 +12,7 @@ from app.config import AppConfig, CatalogConfig
 from app.costs import record
 from app.llm.client import load_prompt
 from app.moderation import ContactFilter, strip_contacts
-from app.schemas import CatalogFilters
+from app.schemas import SearchFilters
 from app.search.catalog import ComplexHit
 
 REF = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")  # [3] и на всякий случай [1, 3]
@@ -35,8 +35,8 @@ class AnswerResult:
     output_tokens: int = 0
 
 
-CATALOG_PROMPT_FILE = "answer_catalog.md"
-CATALOG_RELAX_TEXT = {
+PROMPT_FILE = "answer.md"
+RELAX_TEXT = {
     "features": "инфраструктура ЖК",
     "payment": "способ покупки",
     "finishing": "отделка",
@@ -61,15 +61,15 @@ def completion_text(c: dict) -> str:
     return "дом сдан" if c["delivered"] else f"сдача {c['completion_quarter']} кв. {c['completion_year']}"
 
 
-def build_catalog_message(
-    query: str, filters: CatalogFilters, relaxed: list[str], hits: list[ComplexHit], cat: CatalogConfig
+def build_user_message(
+    query: str, filters: SearchFilters, relaxed: list[str], hits: list[ComplexHit], cat: CatalogConfig
 ) -> str:
     shown = filters.model_dump(exclude_defaults=True, exclude={"semantic_query", "needs_clarification"})
     lines = [
         f"Запрос: {query}",
         f"Условия запроса (фильтры, уже применены поиском): {shown or 'нет'}",
         f"Смысловая часть (подтверждать описанием ЖК): {filters.semantic_query or 'нет'}",
-        "Ослаблено поиском: " + (", ".join(CATALOG_RELAX_TEXT.get(r, r) for r in relaxed) if relaxed else "ничего"),
+        "Ослаблено поиском: " + (", ".join(RELAX_TEXT.get(r, r) for r in relaxed) if relaxed else "ничего"),
         "",
         "Кандидаты — ЖК:" if hits else "Кандидатов нет: поиск ничего не нашёл.",
     ]
@@ -116,9 +116,9 @@ def resolve_refs(text: str, ids: list[str]) -> tuple[str, list[int], list[str]]:
     return REF.sub(sub, text), invalid, cited
 
 
-def generate_catalog_answer(
+def generate_answer(
     query: str,
-    filters: CatalogFilters,
+    filters: SearchFilters,
     relaxed: list[str],
     hits: list[ComplexHit],
     cfg: AppConfig,
@@ -128,9 +128,9 @@ def generate_catalog_answer(
     client: anthropic.Anthropic | None = None,
 ) -> AnswerResult:
     """Ответ по найденным ЖК (новостройки): ссылки [n] → source_id ЖК."""
-    message = build_catalog_message(query, filters, relaxed, hits, cfg.catalog)
+    message = build_user_message(query, filters, relaxed, hits, cfg.catalog)
     ids = [h.complex["source_id"] for h in hits]
-    return _generate(message, ids, CATALOG_PROMPT_FILE, cfg, api_key, model, on_text, client)
+    return _generate(message, ids, PROMPT_FILE, cfg, api_key, model, on_text, client)
 
 
 def _generate(

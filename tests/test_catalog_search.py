@@ -1,12 +1,12 @@
 import pytest
 
-from app.schemas import CatalogFilters
+from app.schemas import SearchFilters
 from app.search import catalog
 from app.search.catalog import complex_where, group_units, relaxed_filters, unit_where
 
 
 def test_where_clauses_are_parametrized():
-    f = CatalogFilters(
+    f = SearchFilters(
         city="Алматы",
         classes=["business"],
         completion_max_year=2027,
@@ -26,7 +26,7 @@ def test_where_clauses_are_parametrized():
     assert "u.orientation && %(orientations)s::text[]" in uw  # любая из сторон
     assert up["views"] == ["mountains"] and cp["payment"] == ["installment"]
     assert "Алматы" not in cw and "mountains" not in uw  # значения только в параметрах
-    assert complex_where(CatalogFilters()) == ("true", {})
+    assert complex_where(SearchFilters()) == ("true", {})
 
 
 def test_search_relaxes_soft_filters_in_order_only_when_empty(monkeypatch):
@@ -37,7 +37,7 @@ def test_search_relaxes_soft_filters_in_order_only_when_empty(monkeypatch):
         return ["cx-1"] if not f.views else []
 
     monkeypatch.setattr(catalog, "hybrid_search", fake)
-    f = CatalogFilters(city="Астана", features=["near_park"], views=["mountains"], completion_max_year=2027)
+    f = SearchFilters(city="Астана", features=["near_park"], views=["mountains"], completion_max_year=2027)
     ids, relaxed = catalog.search(None, f, "[0]", "q")
     assert ids == ["cx-1"] and relaxed == ["features", "views"]  # payment и др. не заданы — пропущены
     assert calls[-1].completion_max_year == 2027 and calls[-1].city == "Астана"  # срок и город не тронуты
@@ -46,7 +46,7 @@ def test_search_relaxes_soft_filters_in_order_only_when_empty(monkeypatch):
 
 def test_search_never_relaxes_hard_filters(monkeypatch):
     monkeypatch.setattr(catalog, "hybrid_search", lambda *a: [])
-    f = CatalogFilters(city="Астана", rooms=[5], price_max_kzt=1, classes=["business"], not_first_floor=True)
+    f = SearchFilters(city="Астана", rooms=[5], price_max_kzt=1, classes=["business"], not_first_floor=True)
     assert catalog.search(None, f, "[0]", "q") == ([], [])  # честный ноль
 
 
@@ -74,7 +74,7 @@ def _db():
 
 
 def test_hits_respect_filters_on_real_data():
-    f = CatalogFilters(city="Алматы", rooms=[2, 3], price_max_kzt=70_000_000, not_first_floor=True, views=["mountains"])
+    f = SearchFilters(city="Алматы", rooms=[2, 3], price_max_kzt=70_000_000, not_first_floor=True, views=["mountains"])
     with _db() as conn:
         qvec = conn.execute("SELECT embedding::text FROM complexes ORDER BY source_id LIMIT 1").fetchone()[0]
         ids, relaxed = catalog.search(conn, f, qvec, "тихий двор")

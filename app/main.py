@@ -13,8 +13,8 @@ from pydantic import BaseModel, Field
 from app.config import get_settings, load_config
 from app.db import connect
 from app.limits import RateLimiter, budget_left, frame_ancestors
-from app.llm.parser import parse_catalog_query
-from app.schemas import CatalogFilters
+from app.llm.parser import parse_query
+from app.schemas import SearchFilters
 from app.service import run_search
 
 app = FastAPI(title="prop-mind")
@@ -99,11 +99,11 @@ def health() -> dict:
 
 
 @app.post("/parse")
-def parse(body: QueryIn, request: Request) -> CatalogFilters:
+def parse(body: QueryIn, request: Request) -> SearchFilters:
     """Только разбор запроса в фильтры: для отладки и evals."""
     guard(request, body.site_key)
     try:
-        return parse_catalog_query(body.query, cfg, get_settings())
+        return parse_query(body.query, cfg, get_settings())
     except Exception as e:  # noqa: BLE001 — сбой LLM → 502, а не 500 со стектрейсом
         raise HTTPException(502, f"parser failed: {e.__class__.__name__}") from e
 

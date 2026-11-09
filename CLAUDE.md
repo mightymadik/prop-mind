@@ -35,7 +35,7 @@ v1 — фиксированный workflow. v2 (tool use) — только по�
 - Синтетика (ЖК и квартиры): `uv run python scripts/generate_catalog.py --config config/demo.yaml`
 - Индексация: `uv run python scripts/sync_catalog.py --config config/demo.yaml`
 - Разметка смысловых кейсов: `uv run python scripts/label_catalog.py review|apply`
-- Evals: разбор `uv run python evals/run_evals.py --repeats 3`; поиск `--layer search-catalog --parsed-from <отчёт>`;
+- Evals: разбор `uv run python evals/run_evals.py --repeats 3`; поиск `--layer search --parsed-from <отчёт>`;
   ответ `--layer answer --models claude-sonnet-5-5 --judge --parsed-from <отчёт>`; red-team `evals/run_redteam.py`
 - Git-хук атрибуции: `git config core.hooksPath .githooks` (один раз, вручную)
 

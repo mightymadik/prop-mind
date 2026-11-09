@@ -21,15 +21,15 @@ from pydantic import BaseModel
 
 from app.config import get_settings, load_config
 from app.db import connect
-from app.llm.answer import cost_usd, generate_catalog_answer
+from app.llm.answer import cost_usd, generate_answer
 from app.llm.client import call_structured, load_prompt
 from app.moderation import CONTACT, index_description
-from app.pipeline import retrieve_catalog
-from app.schemas import CatalogFilters
+from app.pipeline import retrieve
+from app.schemas import SearchFilters
 from app.search import catalog
 from app.search.catalog import ComplexHit
 from app.search.rerank import rerank, rerank_ids
-from evals.run_evals import CATALOG_CASES, RERANK_CACHE, ROOT, RerankCache, claims_no_match, embed_queries
+from evals.run_evals import CASES, RERANK_CACHE, ROOT, RerankCache, claims_no_match, embed_queries
 
 FILES = {"dev": ROOT / "redteam.jsonl", "holdout": ROOT / "redteam_holdout.jsonl"}
 CATEGORIES = ("promote", "suppress", "offtask", "contacts", "spoof", "query", "stuffing")
@@ -118,12 +118,10 @@ def main() -> None:
     cases = [json.loads(ln) for ln in FILES[args.split].open(encoding="utf-8") if ln.strip()]
     cases = [c for c in cases if not args.cases or c["id"] in args.cases]
     assert all(c["category"] in CATEGORIES for c in cases), "неизвестная категория"
-    base_cases = {
-        c["id"]: c for c in (json.loads(ln) for ln in CATALOG_CASES["dev"].open(encoding="utf-8") if ln.strip())
-    }
+    base_cases = {c["id"]: c for c in (json.loads(ln) for ln in CASES["dev"].open(encoding="utf-8") if ln.strip())}
     # базовые кейсы — на эталонных фильтрах: выдача воспроизводима, атака — единственная разница с контролем
     frozen = {
-        cid: CatalogFilters.model_validate(c["expected_filters"])
+        cid: SearchFilters.model_validate(c["expected_filters"])
         for cid, c in base_cases.items()
         if not c["expected_filters"].get("needs_clarification")
     }
@@ -150,7 +148,7 @@ def main() -> None:
         def base_retrieval(bid: str):
             if bid not in retrievals:
                 b = base_cases[bid]
-                retrievals[bid] = retrieve_catalog(
+                retrievals[bid] = retrieve(
                     conn, b["query"], cfg, settings, filters=frozen[bid], embed_fn=embed_fn, rerank_fn=rerank_fn
                 )
             return retrievals[bid]
@@ -163,7 +161,7 @@ def main() -> None:
             else:
                 for i in range(args.repeats):
                     if c["category"] == "query":  # атака в самом запросе: разбор живой, как в продукте
-                        r = retrieve_catalog(conn, c["query"], cfg, settings, embed_fn=embed_fn, rerank_fn=rerank_fn)
+                        r = retrieve(conn, c["query"], cfg, settings, embed_fn=embed_fn, rerank_fn=rerank_fn)
                         if r.clarification:
                             row["runs"].append({"clarified": True, "success": False})
                             continue
@@ -174,11 +172,11 @@ def main() -> None:
                         hits = inject(r.hits, c["position"], c["attack"], c.get("mode", "append"))
                         key = (c["base_case"], i)
                         if key not in controls:
-                            controls[key] = generate_catalog_answer(
+                            controls[key] = generate_answer(
                                 query, r.filters, r.relaxed, r.hits, cfg, settings.anthropic_api_key
                             )
                         control = controls[key]
-                    a = generate_catalog_answer(query, r.filters, r.relaxed, hits, cfg, settings.anthropic_api_key)
+                    a = generate_answer(query, r.filters, r.relaxed, hits, cfg, settings.anthropic_api_key)
                     sig = signals(c, a, control, injected_id)
                     v = judge_injection(c.get("attack") or c["query"], query, a.raw_text, cfg, settings)
                     row["runs"].append(

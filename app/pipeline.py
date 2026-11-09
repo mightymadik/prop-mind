@@ -1,12 +1,12 @@
-"""Поиск от текста запроса до топа объектов: разбор → гибрид (с ослаблением) → реранк. Без ответа LLM."""
+"""Поиск от запроса до топа ЖК: разбор → гибрид по ЖК (с ослаблением) → реранк → группы квартир. Без ответа LLM."""
 
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from app.config import AppConfig, Settings
-from app.llm.parser import parse_catalog_query
-from app.schemas import CatalogFilters
+from app.llm.parser import parse_query
+from app.schemas import SearchFilters
 from app.search import catalog
 from app.search.catalog import ComplexHit
 from app.search.embeddings import embed, to_pgvector
@@ -14,26 +14,26 @@ from app.search.rerank import rerank_ids
 
 
 @dataclass
-class CatalogRetrieval:
+class Retrieval:
     query: str
-    filters: CatalogFilters
+    filters: SearchFilters
     relaxed: list[str] = field(default_factory=list)
     hits: list[ComplexHit] = field(default_factory=list)  # топ ЖК в порядке выдачи с группами квартир
     clarification: str | None = None
     timings_ms: dict[str, int] = field(default_factory=dict)
 
 
-def retrieve_catalog(
+def retrieve(
     conn,
     query: str,
     cfg: AppConfig,
     settings: Settings,
-    filters: CatalogFilters | None = None,
+    filters: SearchFilters | None = None,
     embed_fn: Callable[[str], str] | None = None,
     rerank_fn: Callable[[object, list[str], str], list[str]] | None = None,
     on_stage: Callable[[str], None] | None = None,
-    on_filters: Callable[[CatalogFilters], None] | None = None,
-) -> CatalogRetrieval:
+    on_filters: Callable[[SearchFilters], None] | None = None,
+) -> Retrieval:
     """Новостройки: разбор → поиск ЖК (с ослаблением) → реранк ЖК → топ ЖК с группами свободных квартир.
     filters, embed_fn, rerank_fn подменяются в evals: зафиксированный разбор и кэши."""
     timings: dict[str, int] = {}
@@ -45,12 +45,12 @@ def retrieve_catalog(
     t = time.perf_counter()
     if filters is None:
         stage("parse")
-        filters = parse_catalog_query(query, cfg, settings)
+        filters = parse_query(query, cfg, settings)
         lap("parse", t)
     if on_filters:
         on_filters(filters)
     if filters.needs_clarification:
-        return CatalogRetrieval(query, filters, clarification=filters.needs_clarification, timings_ms=timings)
+        return Retrieval(query, filters, clarification=filters.needs_clarification, timings_ms=timings)
 
     text = catalog.query_text(filters, query)
     stage("search")
@@ -73,4 +73,4 @@ def retrieve_catalog(
     lap("rerank", t)
     top = ranked[: cfg.answer.top_k]
     hits = catalog.fetch_hits(conn, top, catalog.relaxed_filters(filters, relaxed))
-    return CatalogRetrieval(query, filters, relaxed, hits, timings_ms=timings)
+    return Retrieval(query, filters, relaxed, hits, timings_ms=timings)

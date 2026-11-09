@@ -4,7 +4,7 @@ RRF), ослабление мягких фильтров, группировка
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from app.schemas import CatalogFilters
+from app.schemas import SearchFilters
 
 
 class _Where:
@@ -20,7 +20,7 @@ class _Where:
         return " AND ".join(self.clauses) or "true"
 
 
-def unit_where(f: CatalogFilters) -> tuple[str, dict[str, Any]]:
+def unit_where(f: SearchFilters) -> tuple[str, dict[str, Any]]:
     """Условия на квартиры (таблица units, алиас u). Только параметры, без склейки ввода."""
     w = _Where()
     w.add("u.status = 'free'")
@@ -53,7 +53,7 @@ def unit_where(f: CatalogFilters) -> tuple[str, dict[str, Any]]:
     return w.sql(), w.params
 
 
-def complex_where(f: CatalogFilters) -> tuple[str, dict[str, Any]]:
+def complex_where(f: SearchFilters) -> tuple[str, dict[str, Any]]:
     """Условия на ЖК (таблица complexes, алиас c)."""
     w = _Where()
     if f.city:
@@ -78,7 +78,7 @@ def complex_where(f: CatalogFilters) -> tuple[str, dict[str, Any]]:
     return w.sql(), w.params
 
 
-def query_text(filters: CatalogFilters, query: str) -> str:
+def query_text(filters: SearchFilters, query: str) -> str:
     """Текст для эмбеддинга и полнотекстового поиска: смысловая часть, а если её нет — весь запрос."""
     return filters.semantic_query.strip() or query
 
@@ -121,20 +121,20 @@ LIMIT %(limit)s
 )
 
 
-def _params(f: CatalogFilters) -> tuple[str, str, dict[str, Any]]:
+def _params(f: SearchFilters) -> tuple[str, str, dict[str, Any]]:
     cw, cp = complex_where(f)
     uw, up = unit_where(f)
     return cw, uw, {**cp, **up}
 
 
-def vector_search(conn, f: CatalogFilters, qvec: str, limit: int = 50) -> list[str]:
+def vector_search(conn, f: SearchFilters, qvec: str, limit: int = 50) -> list[str]:
     cw, uw, params = _params(f)
     rows = conn.execute(VECTOR_SQL.format(cw=cw, uw=uw), {**params, "qvec": qvec, "limit": limit}).fetchall()
     return [r[0] for r in rows]
 
 
 def hybrid_search(
-    conn, f: CatalogFilters, qvec: str, qtext: str, limit: int = 50, pool: int = 50, rrf_k: int = 60
+    conn, f: SearchFilters, qvec: str, qtext: str, limit: int = 50, pool: int = 50, rrf_k: int = 60
 ) -> list[str]:
     cw, uw, params = _params(f)
     rows = conn.execute(
@@ -155,14 +155,14 @@ _RELAX_RESET = {
 }
 
 
-def _is_set(f: CatalogFilters, step: str) -> bool:
+def _is_set(f: SearchFilters, step: str) -> bool:
     if step == "completion":
         return f.completion_max_year is not None or f.delivered_only
     return bool(getattr(f, step))
 
 
 def search(
-    conn, filters: CatalogFilters, qvec: str, qtext: str, mode: SearchMode = "hybrid"
+    conn, filters: SearchFilters, qvec: str, qtext: str, mode: SearchMode = "hybrid"
 ) -> tuple[list[str], list[str]]:
     """(source_id ЖК по убыванию релевантности, какие фильтры сняты). Ослабление — только если строгие
     фильтры дали 0; остановка на первом непустом шаге. Пустой список без мягких фильтров — честный ноль."""
@@ -180,7 +180,7 @@ def search(
     return [], relaxed
 
 
-def relaxed_filters(filters: CatalogFilters, relaxed: list[str]) -> CatalogFilters:
+def relaxed_filters(filters: SearchFilters, relaxed: list[str]) -> SearchFilters:
     """Фильтры после ослабления — по ним же берутся квартиры для группировки."""
     f = filters
     for step in relaxed:
@@ -239,7 +239,7 @@ def group_units(rows: list[tuple]) -> list[UnitGroup]:
     return [groups[k] for k in sorted(groups)]
 
 
-def fetch_hits(conn, complex_ids: list[str], f: CatalogFilters) -> list[ComplexHit]:
+def fetch_hits(conn, complex_ids: list[str], f: SearchFilters) -> list[ComplexHit]:
     """ЖК в порядке complex_ids + их свободные квартиры под фильтры, сгруппированные по числу комнат."""
     if not complex_ids:
         return []

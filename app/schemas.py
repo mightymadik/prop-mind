@@ -45,7 +45,7 @@ class Unit(BaseModel):
     orientation: list[Side]  # стороны света, куда выходят окна
 
 
-class CatalogFilters(BaseModel):
+class SearchFilters(BaseModel):
     """Фильтры поиска новостроек. Условия ЖК и квартир; списки — «любой из», пустой — фильтра нет (без null:
     у API лимит 16 nullable-полей в схеме). Словари — из config.catalog (Literal только в схеме для LLM).
     Квартиры всегда только свободные."""
@@ -81,8 +81,8 @@ class CatalogFilters(BaseModel):
     )
 
 
-def build_catalog_parser_schema(cfg: AppConfig) -> type[CatalogFilters]:
-    """Подкласс CatalogFilters только для LLM: словари — Literal из конфига, все поля обязательны
+def build_parser_schema(cfg: AppConfig) -> type[SearchFilters]:
+    """Подкласс SearchFilters только для LLM: словари — Literal из конфига, все поля обязательны
     (модель явно решает по каждому полю: иначе молча пропускает ключи)."""
     cat = cfg.catalog
 
@@ -102,6 +102,6 @@ def build_catalog_parser_schema(cfg: AppConfig) -> type[CatalogFilters]:
     }
     fields = {
         name: (narrowed.get(name, f.annotation), Field(..., description=f.description))
-        for name, f in CatalogFilters.model_fields.items()
+        for name, f in SearchFilters.model_fields.items()
     }
-    return create_model("CatalogFilters", __base__=CatalogFilters, **fields)
+    return create_model("SearchFilters", __base__=SearchFilters, **fields)

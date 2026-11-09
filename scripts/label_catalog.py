@@ -23,7 +23,7 @@ from app.config import AppConfig, get_settings, load_config
 from app.db import connect
 from app.llm.answer import completion_text
 from app.llm.client import call_structured, load_prompt
-from app.schemas import CatalogFilters
+from app.schemas import SearchFilters
 from app.search.catalog import COMPLEX_FIELDS, complex_where, unit_where
 
 CASES = Path("evals/cases_newbuild.jsonl")
@@ -51,7 +51,7 @@ def labeling_rules(doc: str, heading: str = RULES_HEADING) -> str:
 
 def candidates(conn, case: dict) -> list[dict]:
     """Все ЖК со свободной квартирой под expected_filters, по source_id."""
-    f = CatalogFilters.model_validate(case["expected_filters"])
+    f = SearchFilters.model_validate(case["expected_filters"])
     cw, cp = complex_where(f)
     uw, up = unit_where(f)
     rows = conn.execute(

@@ -8,11 +8,11 @@ from collections.abc import Callable
 from app.config import AppConfig, Settings
 from app.costs import track
 from app.db import connect
-from app.llm.answer import completion_text, generate_catalog_answer
+from app.llm.answer import completion_text, generate_answer
 from app.moderation import is_stuffed, looks_injected
 from app.pii import mask_pii
-from app.pipeline import CatalogRetrieval, retrieve_catalog
-from app.schemas import CatalogFilters
+from app.pipeline import Retrieval, retrieve
+from app.schemas import SearchFilters
 from app.search.catalog import ComplexHit
 
 log_ = logging.getLogger(__name__)
@@ -64,7 +64,7 @@ def flagged_complexes(hits: list[ComplexHit], cfg: AppConfig) -> list[str]:
     ]
 
 
-def catalog_chips(f: CatalogFilters, cfg: AppConfig) -> list[str]:
+def catalog_chips(f: SearchFilters, cfg: AppConfig) -> list[str]:
     """Распознанные условия новостроек короткими подписями."""
     cat = cfg.catalog
     chips = [f.city] if f.city else []
@@ -120,18 +120,18 @@ def run_search(query: str, cfg: AppConfig, settings: Settings, on_event: Event |
     emit = on_event or (lambda name, data: None)
     t0 = time.perf_counter()
     payload: dict = {"query": query, "error": None}
-    r: CatalogRetrieval | None = None
+    r: Retrieval | None = None
     answer = None
     with track() as ledger:
         try:
 
-            def on_filters(f: CatalogFilters) -> None:
+            def on_filters(f: SearchFilters) -> None:
                 payload["filters"] = f.model_dump(exclude_defaults=True)
                 payload["chips"] = catalog_chips(f, cfg)
                 emit("filters", {"filters": payload["filters"], "chips": payload["chips"]})
 
             with connect() as conn:
-                r = retrieve_catalog(
+                r = retrieve(
                     conn,
                     query,
                     cfg,
@@ -149,7 +149,7 @@ def run_search(query: str, cfg: AppConfig, settings: Settings, on_event: Event |
                 # номер [n] в тексте ответа = n-й объект этого списка
                 emit("results", {"relaxed": r.relaxed, "results": payload["results"]})
                 emit("status", {"stage": "answer"})
-                answer = generate_catalog_answer(
+                answer = generate_answer(
                     query,
                     r.filters,
                     r.relaxed,
@@ -185,7 +185,7 @@ def run_search(query: str, cfg: AppConfig, settings: Settings, on_event: Event |
     return payload
 
 
-def log(payload: dict, r: CatalogRetrieval | None, answer) -> None:
+def log(payload: dict, r: Retrieval | None, answer) -> None:
     """Запись в query_log — и при ошибке запроса. Текст запроса — после маскирования ПДн."""
     row = {
         "query": mask_pii(payload["query"]),

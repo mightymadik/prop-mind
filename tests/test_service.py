@@ -4,8 +4,8 @@ from app import service
 from app.config import Settings, load_config
 from app.costs import record
 from app.llm.answer import AnswerResult
-from app.pipeline import CatalogRetrieval as Retrieval
-from app.schemas import CatalogFilters as SearchFilters
+from app.pipeline import Retrieval
+from app.schemas import SearchFilters
 from app.search.catalog import ComplexHit, UnitGroup
 
 CFG = load_config("config/demo.yaml")
@@ -63,8 +63,8 @@ def test_events_order_and_payload(monkeypatch, logged):
             total_ms=3000,
         )
 
-    monkeypatch.setattr(service, "retrieve_catalog", fake_retrieve)
-    monkeypatch.setattr(service, "generate_catalog_answer", fake_answer)
+    monkeypatch.setattr(service, "retrieve", fake_retrieve)
+    monkeypatch.setattr(service, "generate_answer", fake_answer)
     events = []
     out = service.run_search("q", CFG, Settings(), on_event=lambda n, d: events.append(n))
     assert events == ["status", "filters", "results", "status", "delta", "answer", "done"]
@@ -85,12 +85,12 @@ def test_clarification_skips_answer(monkeypatch, logged):
     f = SearchFilters(city="Астана", needs_clarification="Метро есть только в Алматы.")
     monkeypatch.setattr(
         service,
-        "retrieve_catalog",
+        "retrieve",
         lambda conn, q, cfg, s, on_stage=None, on_filters=None: (
             on_filters(f) or Retrieval(q, f, clarification=f.needs_clarification)
         ),
     )
-    monkeypatch.setattr(service, "generate_catalog_answer", lambda *a, **k: pytest.fail("answer called"))
+    monkeypatch.setattr(service, "generate_answer", lambda *a, **k: pytest.fail("answer called"))
     events = []
     out = service.run_search("у метро в Астане", CFG, Settings(), on_event=lambda n, d: events.append(n))
     assert events == ["filters", "clarification", "done"] and out["clarification"]
@@ -101,7 +101,7 @@ def test_error_is_logged_and_reraised(monkeypatch, logged):
     def boom(*a, **k):
         raise RuntimeError("voyage down")
 
-    monkeypatch.setattr(service, "retrieve_catalog", boom)
+    monkeypatch.setattr(service, "retrieve", boom)
     with pytest.raises(RuntimeError):
         service.run_search("q", CFG, Settings())
     payload, r, answer = logged[0]
@@ -113,7 +113,7 @@ def test_log_failure_does_not_break_search(monkeypatch):
     f = SearchFilters(needs_clarification="?")
     monkeypatch.setattr(
         service,
-        "retrieve_catalog",
+        "retrieve",
         lambda conn, q, cfg, s, on_stage=None, on_filters=None: Retrieval(q, f, clarification="?"),
     )
     monkeypatch.setattr(service, "log", lambda *a: (_ for _ in ()).throw(OSError("db down")))

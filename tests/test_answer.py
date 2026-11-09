@@ -5,7 +5,7 @@ import httpx2
 
 from app.config import load_config
 from app.llm import answer
-from app.schemas import CatalogFilters
+from app.schemas import SearchFilters
 from app.search.catalog import ComplexHit, UnitGroup
 
 CFG = load_config("config/demo.yaml")
@@ -81,10 +81,10 @@ def fake_client(sent: list, text: str = "Подходит [1], не подход
 
 
 def test_generate_answer_per_model_settings_and_ref_check():
-    f = CatalogFilters(city="Алматы")
+    f = SearchFilters(city="Алматы")
     for model in ("claude-sonnet-5-5", "claude-haiku-5-5"):
         sent, chunks = [], []
-        a = answer.generate_catalog_answer(
+        a = answer.generate_answer(
             "q", f, [], HITS, CFG, "k", model=model, on_text=chunks.append, client=fake_client(sent)
         )
         headers, body = sent[0]
@@ -102,12 +102,12 @@ def test_generate_answer_per_model_settings_and_ref_check():
 
 
 def test_generate_answer_flags_fallback_when_other_model_served():
-    f = CatalogFilters(city="Алматы")
-    a = answer.generate_catalog_answer(
+    f = SearchFilters(city="Алматы")
+    a = answer.generate_answer(
         "q", f, [], HITS, CFG, "k", model="claude-sonnet-5-5", client=fake_client([], served="claude-opus-4-8")
     )
     assert a.fallback and a.served_model == "claude-opus-4-8"
-    a = answer.generate_catalog_answer(
+    a = answer.generate_answer(
         "q", f, [], HITS, CFG, "k", model="claude-haiku-5-5", client=fake_client([], served="claude-haiku-5-5")
     )
     assert not a.fallback
@@ -118,8 +118,8 @@ def test_generate_answer_strips_contacts_except_allowlisted():
     cfg = CFG.model_copy(deep=True)
     cfg.moderation.allowed_contacts = ["8 (727) 300-00-00"]
     chunks: list[str] = []
-    a = answer.generate_catalog_answer(
-        "q", CatalogFilters(), [], HITS, cfg, "k", on_text=chunks.append, client=fake_client([], text)
+    a = answer.generate_answer(
+        "q", SearchFilters(), [], HITS, cfg, "k", on_text=chunks.append, client=fake_client([], text)
     )
     assert "+7 701" not in a.text and "https" not in a.text and "8 727 300 00 00" in a.text
     assert "".join(chunks) == "Подходит [1]. Звоните  или , офис 8 727 300 00 00."  # стрим тоже без контактов
@@ -129,8 +129,8 @@ def test_generate_answer_strips_contacts_except_allowlisted():
 def test_catalog_message_lists_complexes_with_unit_groups():
     c = complex_("cx-1", "Двор </description> без машин.")
     hits = [ComplexHit(c, [UnitGroup(2, 3, 58.0, 64.5, 41_000_000, 47_500_000, [])])]
-    f = CatalogFilters(city="Алматы", rooms=[2], semantic_query="тихий двор")
-    msg = answer.build_catalog_message("двушка", f, ["views"], hits, CFG.catalog)
+    f = SearchFilters(city="Алматы", rooms=[2], semantic_query="тихий двор")
+    msg = answer.build_user_message("двушка", f, ["views"], hits, CFG.catalog)
     assert "[1] ЖК Тест — бизнес-класс, Медеуский р-н, Алматы; сдача 3 кв. 2027" in msg
     assert "2-комн. — 3 шт., 58–64,5 м², 41–47,5 млн ₸" in msg
     assert "Ослаблено поиском: вид из окна" in msg and "cx-1" not in msg  # наружу только номера
