@@ -172,7 +172,7 @@ def search(
         if step is not None:
             if not _is_set(f, step):
                 continue
-            f = f.model_copy(update=_RELAX_RESET.get(step, {step: None}))
+            f = f.model_copy(update=_RELAX_RESET.get(step, {step: []}))
             relaxed.append(step)
         ranked = vector_search(conn, f, qvec) if mode == "vector" else hybrid_search(conn, f, qvec, qtext)
         if ranked:
@@ -184,7 +184,7 @@ def relaxed_filters(filters: CatalogFilters, relaxed: list[str]) -> CatalogFilte
     """Фильтры после ослабления — по ним же берутся квартиры для группировки."""
     f = filters
     for step in relaxed:
-        f = f.model_copy(update=_RELAX_RESET.get(step, {step: None}))
+        f = f.model_copy(update=_RELAX_RESET.get(step, {step: []}))
     return f
 
 

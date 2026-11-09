@@ -334,3 +334,13 @@ def test_claims_no_match_phrases():
     assert claims_no_match("Подходящих вариантов нет.") == "Подходящих вариантов нет"
     for ok in ("Все десять вариантов подходят.", "Лучшие варианты: [syn-1].", "Не подходит только [syn-2]."):
         assert claims_no_match(ok) is None
+
+
+def test_catalog_compare_treats_year_without_quarter_as_q4():
+    from app.schemas import CatalogFilters
+
+    c = {"expected_filters": {"city": "Алматы", "completion_max_year": 2027}, "semantic": "empty"}
+    got = CatalogFilters(city="Алматы", completion_max_year=2027, completion_max_quarter=4)
+    assert all(compare_filters(got, c).values())
+    assert compare_filters(got.model_copy(update={"completion_max_quarter": 2}), c)["completion_max_quarter"] is False
+    assert compare_filters(got.model_copy(update={"views": ["river"]}), c)["views"] is False  # лишний фильтр

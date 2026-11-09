@@ -29,17 +29,16 @@ from app.config import get_settings, load_config
 from app.db import connect
 from app.llm.answer import cost_usd, generate_answer
 from app.llm.client import PROMPTS_DIR, call_structured, load_prompt
-from app.llm.parser import PROMPT_FILE, parse_query
+from app.llm.parser import CATALOG_PROMPT_FILE, PROMPT_FILE, parse_catalog_query, parse_query
 from app.pipeline import retrieve
-from app.schemas import SearchFilters
+from app.schemas import CatalogFilters, SearchFilters
 from app.search.embeddings import embed, to_pgvector
 from app.search.hybrid import query_text, search, where_from_filters
 from app.search.rerank import rerank_ids
 
 ROOT = Path(__file__).resolve().parent
 K = 10
-EXACT_FIELDS = [f for f in SearchFilters.model_fields if f not in ("semantic_query", "needs_clarification")]
-DEFAULTS = SearchFilters().model_dump()
+CATALOG_CASES = {"dev": ROOT / "cases_newbuild.jsonl", "holdout": ROOT / "cases_newbuild_holdout.jsonl"}
 
 
 def _norm(v: Any) -> Any:
@@ -48,14 +47,25 @@ def _norm(v: Any) -> Any:
     return v
 
 
-def compare_filters(got: SearchFilters, case: dict) -> dict[str, bool]:
+def _quarter(d: dict) -> dict:
+    """Срок сдачи: год без квартала = до конца года (4 квартал) — в фильтре это одно и то же."""
+    if d.get("completion_max_year") is not None and d.get("completion_max_quarter") is None:
+        return d | {"completion_max_quarter": 4}
+    return d
+
+
+def compare_filters(got: SearchFilters | CatalogFilters, case: dict) -> dict[str, bool]:
     """Поле → совпало ли. Проверяются только поля, которые надо проверять в этом кейсе."""
     expected = case["expected_filters"]
     if expected.get("needs_clarification"):
         return {"needs_clarification": bool(got.needs_clarification)}
 
-    g = got.model_dump()
-    checks = {f: _norm(g[f]) == _norm(expected.get(f, DEFAULTS[f])) for f in EXACT_FIELDS}
+    model = CatalogFilters if isinstance(got, CatalogFilters) else SearchFilters
+    fields = [f for f in model.model_fields if f not in ("semantic_query", "needs_clarification")]
+    defaults = model().model_dump()
+    g = _quarter(got.model_dump())
+    e = _quarter({f: expected.get(f, defaults[f]) for f in fields})
+    checks = {f: _norm(g[f]) == _norm(e[f]) for f in fields}
     checks["needs_clarification"] = not got.needs_clarification
     mode = case["semantic"]
     if mode != "any":
@@ -97,22 +107,23 @@ def summarize(cases: list[dict]) -> dict:
     }
 
 
-def run_case(case: dict, cfg, settings) -> dict:
+def run_case(case: dict, cfg, settings, catalog: bool = False) -> dict:
     t = time.perf_counter()
     try:
-        got = parse_query(case["query"], cfg, settings)
+        got = (parse_catalog_query if catalog else parse_query)(case["query"], cfg, settings)
         error = None
     except Exception as e:  # noqa: BLE001 — упавший прогон = неверный, eval продолжается
         got, error = None, f"{e.__class__.__name__}: {e}"
     latency = int((time.perf_counter() - t) * 1000)
     checks = compare_filters(got, case) if got else {"error": False}
+    defaults = (CatalogFilters if catalog else SearchFilters)().model_dump()
     return {
         "ok": all(checks.values()),
         "checks": checks,
         "error": error,
         "latency_ms": latency,
         # относительно SearchFilters: у схемы для LLM дефолтов нет, exclude_defaults не сработал бы
-        "got": {k: v for k, v in got.model_dump().items() if _norm(v) != _norm(DEFAULTS[k])} if got else None,
+        "got": {k: v for k, v in got.model_dump().items() if _norm(v) != _norm(defaults[k])} if got else None,
     }
 
 
@@ -153,8 +164,9 @@ def summarize_search(results: list[dict]) -> dict:
     }
 
 
-def load_cases(split: str) -> list[dict]:
-    cases = [json.loads(line) for line in (ROOT / "cases.jsonl").open(encoding="utf-8") if line.strip()]
+def load_cases(split: str, catalog: bool = False) -> list[dict]:
+    path = CATALOG_CASES[split] if catalog else ROOT / "cases.jsonl"
+    cases = [json.loads(line) for line in path.open(encoding="utf-8") if line.strip()]
     cases = [c for c in cases if c["split"] == split]
     if not cases:
         raise SystemExit(f"no cases with split={split}")
@@ -858,6 +870,7 @@ def main() -> None:
     ap.add_argument("--split", default="dev", choices=["dev", "holdout"])
     ap.add_argument("--repeats", type=int, default=1, help="parse: прогонов на кейс, оценка разброса")
     ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--catalog", action="store_true", help="parse: новостройки (cases_newbuild*.jsonl)")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
@@ -879,11 +892,11 @@ def main() -> None:
 
 
 def run_parse(args, cfg, settings) -> None:
-    cases = load_cases(args.split)
+    cases = load_cases(args.split, args.catalog)
 
     jobs = [c for c in cases for _ in range(args.repeats)]
     with ThreadPoolExecutor(args.workers) as pool:
-        runs = list(pool.map(lambda c: run_case(c, cfg, settings), jobs))
+        runs = list(pool.map(lambda c: run_case(c, cfg, settings, args.catalog), jobs))
     results = []
     for i, c in enumerate(cases):
         rs = runs[i * args.repeats : (i + 1) * args.repeats]
@@ -900,7 +913,8 @@ def run_parse(args, cfg, settings) -> None:
         )
 
     summary = summarize(results)
-    prompt = (PROMPTS_DIR / PROMPT_FILE).read_bytes()
+    prompt_file = CATALOG_PROMPT_FILE if args.catalog else PROMPT_FILE
+    prompt = (PROMPTS_DIR / prompt_file).read_bytes()
     now = datetime.now(UTC)
     report = {
         "layer": "parse",
@@ -908,17 +922,18 @@ def run_parse(args, cfg, settings) -> None:
         "date": now.isoformat(timespec="seconds"),
         "config": args.config,
         "model": cfg.models["parser"],
-        "prompt": PROMPT_FILE,
+        "prompt": prompt_file,
         "prompt_sha": hashlib.sha256(prompt).hexdigest()[:12],
         "summary": summary,
         "results": results,
     }
-    out = ROOT / "results" / f"{now:%Y%m%dT%H%M%SZ}_parse_{args.split}_x{args.repeats}.json"
+    kind = "parse_catalog" if args.catalog else "parse"
+    out = ROOT / "results" / f"{now:%Y%m%dT%H%M%SZ}_{kind}_{args.split}_x{args.repeats}.json"
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
     fc = summary["fully_correct"]
     print(
-        f"parse/{args.split} x{args.repeats}: fully correct {fc['mean']:.0%} ± {fc['stdev']:.0%} "
+        f"{kind}/{args.split} x{args.repeats}: fully correct {fc['mean']:.0%} ± {fc['stdev']:.0%} "
         f"(min {fc['min']:.0%}, max {fc['max']:.0%}; {summary['cases']} cases, {summary['errors']} errors), "
         f"p50 {summary['latency_ms']['p50']} ms, p95 {summary['latency_ms']['p95']} ms"
     )
