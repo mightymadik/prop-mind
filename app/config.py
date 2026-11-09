@@ -59,8 +59,8 @@ class SiteConfig(BaseModel):
 
 class ModerationConfig(BaseModel):
     allowed_contacts: list[str] = []  # контакты, которые ответу можно выводить (прод: отдел продаж); иначе вырезаются
-    stuffing_min_repeats: int = 3  # набивка: одна основа слова повторяется не меньше стольких раз…
-    stuffing_min_ratio: float = 0.15  # …и доля повторов в описании не меньше этой
+    stuffing_min_repeats: int = 4  # набивка: одна основа слова повторяется не меньше стольких раз…
+    stuffing_min_ratio: float = 0.05  # …и доля повторов в описании не меньше этой
 
 
 class CatalogConfig(BaseModel):

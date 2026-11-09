@@ -42,8 +42,10 @@ def looks_injected(text: str) -> bool:
 
 
 def is_stuffed(text: str, cfg: ModerationConfig) -> bool:
-    """Набивка ключевыми словами: одна основа (первые 5 букв) повторяется часто и повторов много."""
-    stems = [w[:5] for w in _WORD.findall(text.lower())]
+    """Набивка ключевыми словами: одна основа (первые 4 буквы — «парк», «парка», «парком» вместе) повторяется
+    часто и повторов много. ponytail: порог по числу повторов откалиброван на 70 описаниях ЖК демо
+    (максимум 3); на длинных текстах прода — перекалибровать или заменить классификатором."""
+    stems = [w[:4] for w in _WORD.findall(text.lower())]
     if not stems:
         return False
     top = Counter(stems).most_common(1)[0][1]

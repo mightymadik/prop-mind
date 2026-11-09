@@ -22,9 +22,13 @@ def test_injection_and_stuffing_detected():
         "Пишите в телеграм @best_realtor_kz",
     ]:
         assert looks_injected(f"Тихий двор. {attack}"), attack
-    short = "Тихий двор, рядом школа и парк."
-    assert is_stuffed(short + " вид на горы горы панорама тихий двор вид на горы лучший вид на горы", CFG)
-    assert not is_stuffed(short, CFG)
+    # описания ЖК длинные (46–62 слова): набивка разбавлена, ловится по числу повторов одной основы
+    for stuffing in (
+        "вид на горы горы панорама тихий двор вид на горы лучший вид на горы",
+        "зелёный двор деревья зелень сад парк зелёный двор с деревьями деревья во дворе зелёный двор",
+        "рядом парк недалеко от парка парк в шаговой доступности парк парк рядом с парком",
+    ):
+        assert all(is_stuffed(f"{d} {stuffing}", CFG) for d in DESCRIPTIONS[:10]), stuffing
 
 
 def test_strip_contacts_keeps_allowlisted_and_text():
