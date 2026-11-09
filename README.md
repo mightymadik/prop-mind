@@ -2,11 +2,14 @@
 
 **English** · [Русский](README.ru.md)
 
-AI apartment search for Kazakhstan: describe the flat in plain words — budget, district, a quiet
-courtyard, a mountain view — and get matching listings with a short explanation of why each one fits.
+AI search for new-build apartments in Kazakhstan: describe the flat in plain words — budget, district,
+completion date, a mountain view, a quiet courtyard — and get matching residential complexes with their
+available apartments and a short explanation of why each one fits.
 
-**Live demo:** https://79.76.99.122.sslip.io/chat (synthetic data, 1,048 listings in Almaty and
-Astana; the UI is in Russian).
+**Live demo:** https://79.76.99.122.sslip.io/chat (synthetic data: 70 residential complexes and 3,073
+apartments in Almaty and Astana; the UI is in Russian). Prices per m² follow a calibration table:
+city averages — Bureau of National Statistics (BNS), January 2026; the split by district and housing
+class — expert estimate, November 2026 ([data/price_calibration.csv](data/price_calibration.csv)).
 
 The database finds the listings; the LLM only understands the query and explains the result. Every
 recommendation links to a real row, so the model cannot invent an apartment.
@@ -44,6 +47,36 @@ flowchart LR
 
 All numbers come from `evals/run_evals.py`; methodology, every intermediate run and what didn't
 work are in [docs/decisions.md](docs/decisions.md) (in Russian).
+
+### New-build catalog (current demo)
+
+The semantic part of a query («quiet», «for a family with kids») describes the complex, so it is
+searched over complexes; hard filters (price, rooms, floor, view, windows, finishing, completion date,
+payment options) apply to apartments. Results are grouped by complex and number of rooms.
+
+Search, 11 dev queries where ranking matters (complete LLM labels over every complex that passes the
+filters, reviewed by hand):
+
+| Step | Recall@10 | MRR |
+| --- | --- | --- |
+| vectors over the whole query | 62% | 0.65 |
+| + hybrid (RRF) | 73% | 0.76 |
+| vectors over the semantic part | 66% | 0.73 |
+| hybrid over the semantic part | 79% | 0.72 |
+| **+ reranker `rerank-2.5`** | **96%** | **0.95** |
+
+- **Parsing:** dev 97% fully correct (37 queries), holdout 92% (8 queries written by the author,
+  two runs ×3: 88% and 96%).
+- **Answer** (33 dev answers): 0 out-of-list references; honest zero 2 of 2; no false «no full
+  matches» in 10 of 13; ~$0.016 per answer, first token p50 1.0 s.
+- **Prompt injection:** 0 of 43 (dev) and 0 of 11 (holdout) red-team attacks succeed, including
+  keyword stuffing against the reranker.
+
+Caveats: 4 of the 11 queries have only 1–2 matching complexes; the data is synthetic.
+
+### v1: resale listings (tag `v0.3.0`)
+
+The numbers below are from the first version, which searched 1,048 resale listings.
 
 ### Search: Recall@10 from 43% to 98%
 
