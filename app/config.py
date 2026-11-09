@@ -57,6 +57,12 @@ class SiteConfig(BaseModel):
     origins: list[str] = []
 
 
+class ModerationConfig(BaseModel):
+    allowed_contacts: list[str] = []  # контакты, которые ответу можно выводить (прод: отдел продаж); иначе вырезаются
+    stuffing_min_repeats: int = 3  # набивка: одна основа слова повторяется не меньше стольких раз…
+    stuffing_min_ratio: float = 0.15  # …и доля повторов в описании не меньше этой
+
+
 class AppConfig(BaseModel):
     """Несекретные настройки из config/*.yaml."""
 
@@ -73,6 +79,7 @@ class AppConfig(BaseModel):
     pricing: dict[str, Price]  # модель → цена за 1 млн токенов
     limits: LimitsConfig
     sites: dict[str, SiteConfig]
+    moderation: ModerationConfig = ModerationConfig()
 
 
 def load_config(path: str | Path) -> AppConfig:
