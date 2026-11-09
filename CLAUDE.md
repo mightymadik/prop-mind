@@ -34,6 +34,8 @@ v1 — фиксированный workflow. v2 (tool use) — только по�
 - Тесты: `uv run pytest`; страницы чата: `cd web/chat-app && npm test && npm run typecheck`
 - Синтетика: `uv run python scripts/generate_listings.py --config config/demo.yaml --count 2500`
 - Индексация: `uv run python scripts/sync_index.py --config config/demo.yaml`
+- Новостройки (6.3): генерация `uv run python scripts/generate_catalog.py --config config/demo.yaml`,
+  индексация `uv run python scripts/sync_catalog.py --config config/demo.yaml`
 - Evals: `uv run python evals/run_evals.py --config config/demo.yaml` (шаг 2)
 - Git-хук атрибуции: `git config core.hooksPath .githooks` (один раз, вручную)
 

@@ -102,3 +102,36 @@ def build_parser_schema(cfg: AppConfig) -> type[SearchFilters]:
         for name, f in SearchFilters.model_fields.items()
     }
     return create_model("SearchFilters", __base__=SearchFilters, **fields)
+
+
+class CatalogFilters(BaseModel):
+    """Фильтры поиска новостроек. Условия ЖК и квартир; списки — «любой из». Словари — из config.catalog
+    (Literal только в схеме для LLM). Квартиры всегда только свободные."""
+
+    # ЖК
+    city: str | None = Field(None, description="Город; по району можно вывести, угадывать нельзя")
+    districts: list[str] | None = Field(None, description="Районы без слова 'район'")
+    classes: list[str] | None = Field(None, description="Класс жилья")
+    completion_max_year: int | None = Field(None, description="Сдача не позже этого года")
+    completion_max_quarter: int | None = Field(None, description="…и квартала (1–4); год без квартала — 4")
+    delivered_only: bool = Field(False, description="Только сданные дома")
+    features: list[str] = Field(default_factory=list, description="Инфраструктура ЖК — нужны все")
+    payment: list[str] = Field(default_factory=list, description="Способы покупки — нужны все")
+    # квартира
+    rooms: list[int] | None = Field(None, description="Допустимое число комнат. 'Евродвушка' = [2], 'студия' = [1]")
+    price_min_kzt: int | None = Field(None, description="Минимальная цена квартиры в тенге")
+    price_max_kzt: int | None = Field(None, description="Максимальная цена квартиры в тенге")
+    area_min_m2: float | None = None
+    area_max_m2: float | None = None
+    floor_min: int | None = None
+    floor_max: int | None = None
+    not_first_floor: bool = False
+    not_last_floor: bool = False
+    finishing: list[str] | None = Field(None, description="Отделка")
+    windows: list[str] | None = Field(None, description="Куда выходят окна")
+    views: list[str] | None = Field(None, description="Вид из окна")
+    orientations: list[str] | None = Field(None, description="Стороны света; подходит квартира с любой из них")
+    semantic_query: str = Field("", description="То, что не выражается полями: 'тихий двор', 'для семьи с детьми'")
+    needs_clarification: str | None = Field(
+        None, description="Вопрос пользователю, если запрос невыполним или слишком размыт"
+    )

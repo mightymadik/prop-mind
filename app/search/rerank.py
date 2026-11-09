@@ -14,15 +14,26 @@ def rerank(query: str, documents: list[str], model: str, api_key: str) -> list[i
     return [d["index"] for d in sorted(out["data"], key=lambda d: -d["relevance_score"])]
 
 
+TABLES = {"listings", "complexes"}  # где лежит search_text; имя таблицы — только из этого списка
+
+
 def rerank_ids(
-    conn, ids: list[str], query: str, cfg: RerankConfig, api_key: str, model: str | None = None
+    conn,
+    ids: list[str],
+    query: str,
+    cfg: RerankConfig,
+    api_key: str,
+    model: str | None = None,
+    table: str = "listings",
 ) -> list[str]:
     """Переранжирует первые cfg.candidates source_id по search_text; хвост за ними не трогает."""
     if cfg.provider != "voyage":
         raise ValueError(f"unknown rerank provider: {cfg.provider}")
+    if table not in TABLES:
+        raise ValueError(f"unknown table: {table}")
     head, tail = ids[: cfg.candidates], ids[cfg.candidates :]
     text = dict(
-        conn.execute("SELECT source_id, search_text FROM listings WHERE source_id = ANY(%s)", (head,)).fetchall()
+        conn.execute(f"SELECT source_id, search_text FROM {table} WHERE source_id = ANY(%s)", (head,)).fetchall()
     )
     order = rerank(query, [text[i] for i in head], model or cfg.model, api_key)
     return [head[i] for i in order] + tail

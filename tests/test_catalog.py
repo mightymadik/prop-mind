@@ -71,3 +71,26 @@ def test_catalog_source_reads_complexes_and_units(tmp_path):
     assert Unit.model_validate(u | {"view": "river"}).view == "river"  # река / набережная
     with pytest.raises(ValidationError):
         Unit.model_validate(u | {"windows": "roof"})
+
+
+def test_complex_search_text_puts_fields_before_description():
+    from app.schemas import Complex
+    from app.search.text import build_complex_text
+
+    c = Complex(
+        source_id="cx",
+        city="Астана",
+        district="Есильский",
+        name="Тест",
+        developer="Тест Строй",
+        housing_class="comfort",
+        completion_year=2027,
+        completion_quarter=3,
+        features=["near_park"],
+        payment=["installment"],
+        description="Двор без машин.",
+    )
+    assert build_complex_text(c, CFG.catalog) == (
+        "ЖК Тест, новостройка, комфорт-класс, Есильский район, Астана, застройщик Тест Строй, "
+        "сдача 3 квартал 2027 года, рядом парк, рассрочка от застройщика. Двор без машин."
+    )
