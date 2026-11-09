@@ -1,5 +1,6 @@
 """Ответ пользователю по найденным объектам: стриминг, ссылки [n] → source_id, учёт задержки и токенов."""
 
+import html
 import re
 import time
 from collections.abc import Callable
@@ -10,6 +11,7 @@ import anthropic
 from app.config import AppConfig
 from app.costs import record
 from app.llm.client import load_prompt
+from app.moderation import ContactFilter, strip_contacts
 from app.schemas import SearchFilters
 
 PROMPT_FILE = "answer.md"
@@ -54,9 +56,15 @@ def build_user_message(
         lines.append(
             f"[{n}] {price:,} ₸".replace(",", " ")
             + f", {rooms or '-'} комн., {area or '-'} м², {district or '-'} р-н, {cond or '-'}, признаки: {feats_txt}"
-            + f"\n    {desc}"
+            + f"\n    <description>{quote_description(desc)}</description>"
         )
     return "\n".join(lines)
+
+
+def quote_description(desc: str) -> str:
+    """Описание — данные продавца: в одну строку и с экранированными < >, чтобы текст не мог закрыть
+    тег <description>, начать «новую реплику» или строку кандидата [n] с новой строки."""
+    return html.escape(" ".join(desc.split()), quote=False)
 
 
 def resolve_refs(text: str, ids: list[str]) -> tuple[str, list[int], list[str]]:
@@ -105,15 +113,19 @@ def generate_answer(
     else:
         stream_ctx = client.messages.stream(**kwargs)
 
+    allowed = cfg.moderation.allowed_contacts
+    guard = ContactFilter(allowed)  # контакты и ссылки не уходят пользователю даже в стриме
     t0 = time.perf_counter()
     ttft = None
     with stream_ctx as stream:
         for chunk in stream.text_stream:
             if ttft is None and chunk:
                 ttft = int((time.perf_counter() - t0) * 1000)
-            if on_text:
-                on_text(chunk)
+            if on_text and (safe := guard.feed(chunk)):
+                on_text(safe)
         msg = stream.get_final_message()
+    if on_text and (rest := guard.flush()):
+        on_text(rest)
     total = int((time.perf_counter() - t0) * 1000)
 
     # при фолбэке платим по цене модели, которая ответила, если она есть в прайсе
@@ -124,7 +136,7 @@ def generate_answer(
     fallback = any(b.type == "fallback" for b in msg.content) or (msg.model or model) != model
     if msg.stop_reason == "refusal":
         raw = "Не получилось подготовить ответ по этому запросу. Попробуйте переформулировать."
-    text, invalid, cited = resolve_refs(raw, [r[0] for r in rows])
+    text, invalid, cited = resolve_refs(strip_contacts(raw, allowed), [r[0] for r in rows])
     return AnswerResult(
         model=model,
         text=text,
