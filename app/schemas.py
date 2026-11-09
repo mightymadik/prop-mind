@@ -27,6 +27,47 @@ class Listing(BaseModel):
     description: str
 
 
+Finishing = Literal["rough", "pre_finish", "finished"]  # черновая, предчистовая, чистовая
+UnitStatus = Literal["free", "reserved", "sold"]
+Windows = Literal["yard", "street", "both"]  # окна во двор, на улицу, на две стороны
+View = Literal["mountains", "city", "park", "river", "none"]  # river — река или набережная (Астана, Есильский)
+Side = Literal["north", "east", "south", "west"]
+
+
+class Complex(BaseModel):
+    """Жилой комплекс: всё смысловое (описание, инфраструктура) — здесь, на уровне ЖК."""
+
+    source_id: str
+    city: str
+    district: str
+    name: str
+    developer: str
+    housing_class: str  # ключ из config.classes
+    completion_year: int
+    completion_quarter: int = Field(ge=1, le=4)
+    delivered: bool = False  # дом сдан
+    features: list[str] = []  # ключи из config.complex_features
+    payment: list[str] = []  # ключи из config.payment
+    description: str
+
+
+class Unit(BaseModel):
+    """Квартира в ЖК: только структурные поля, своего текста нет."""
+
+    source_id: str
+    complex_id: str  # source_id ЖК
+    rooms: int
+    area_m2: float
+    floor: int
+    floors_total: int
+    price_kzt: int
+    finishing: Finishing
+    status: UnitStatus = "free"
+    windows: Windows
+    view: View
+    orientation: list[Side]  # стороны света, куда выходят окна
+
+
 class SearchFilters(BaseModel):
     """Фильтры поиска. В коде — str/list[str]; Literal из конфига только в build_parser_schema."""
 

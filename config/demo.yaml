@@ -6,6 +6,27 @@ districts:                       # для генерации синтетики 
   Алматы: [Алмалинский, Ауэзовский, Бостандыкский, Жетысуский, Медеуский, Наурызбайский, Турксибский, Алатауский]
   Астана: [Есильский, Алматинский, Сарыаркинский, Байконурский, Нура]
 
+catalog:                         # новостройки (6.3): ЖК → квартиры; ключ → как пишем в тексте
+  complexes_path: data/complexes.jsonl
+  units_path: data/units.jsonl
+  price_calibration_path: data/price_calibration.csv   # средние — БНС, январь 2026; районы и классы — экспертно, ноябрь 2026
+  classes: {comfort: комфорт-класс, business: бизнес-класс}
+  complex_features:
+    near_metro: рядом метро
+    near_school: рядом школа
+    kindergarten: детский сад в ЖК
+    near_park: рядом парк
+    closed_yard: закрытый двор без машин
+    parking: подземный паркинг
+  payment:
+    mortgage: ипотека
+    installment: рассрочка от застройщика
+    state_program: государственные ипотечные программы
+  finishing: {rough: черновая отделка, pre_finish: предчистовая отделка, finished: чистовая отделка}
+  windows: {yard: окна во двор, street: окна на улицу, both: окна на две стороны}
+  views: {mountains: вид на горы, city: вид на город, park: вид на парк, river: вид на реку, none: без особого вида}
+  orientations: {north: север, east: восток, south: юг, west: запад}
+
 field_map:                       # поле источника → поле listings
   price: price_kzt
   room_count: rooms

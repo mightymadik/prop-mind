@@ -63,11 +63,27 @@ class ModerationConfig(BaseModel):
     stuffing_min_ratio: float = 0.15  # …и доля повторов в описании не меньше этой
 
 
+class CatalogConfig(BaseModel):
+    """Новостройки: ЖК → квартиры. Словари — ключ → как пишем в тексте (search_text, промпты, интерфейс)."""
+
+    complexes_path: str
+    units_path: str
+    price_calibration_path: str  # ₸ за м² по городу, району и классу (data/price_calibration.csv)
+    classes: dict[str, str]
+    complex_features: dict[str, str]
+    payment: dict[str, str]
+    finishing: dict[str, str]
+    windows: dict[str, str]
+    views: dict[str, str]
+    orientations: dict[str, str]
+
+
 class AppConfig(BaseModel):
     """Несекретные настройки из config/*.yaml."""
 
     source: str
     data_path: str
+    catalog: CatalogConfig
     cities: list[str]
     districts: dict[str, list[str]]
     field_map: dict[str, str]
