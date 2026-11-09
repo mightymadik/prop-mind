@@ -1,3 +1,5 @@
+from app.config import ModerationConfig
+from app.moderation import index_description
 from app.schemas import Listing
 
 CONDITION_TEXT = {
@@ -9,8 +11,10 @@ CONDITION_TEXT = {
 DEAL_TEXT = {"sale": "продажа", "rent": "аренда"}
 
 
-def build_search_text(listing: Listing, feature_labels: dict[str, str]) -> str:
-    """Contextual retrieval: поля объекта текстом перед описанием."""
+def build_search_text(
+    listing: Listing, feature_labels: dict[str, str], moderation: ModerationConfig | None = None
+) -> str:
+    """Contextual retrieval: поля объекта текстом перед описанием. Набитое описание (moderation) не попадает."""
     parts = [
         f"{listing.rooms}-комнатная квартира" if listing.rooms else "квартира",
         DEAL_TEXT[listing.deal_type],
@@ -23,4 +27,5 @@ def build_search_text(listing: Listing, feature_labels: dict[str, str]) -> str:
         CONDITION_TEXT.get(listing.condition) if listing.condition else None,
         *(feature_labels.get(f, f) for f in listing.features),
     ]
-    return ", ".join(p for p in parts if p) + ". " + listing.description
+    desc = index_description(listing.description, moderation) if moderation else listing.description
+    return ", ".join(p for p in parts if p) + ". " + desc

@@ -63,7 +63,7 @@ def main() -> None:
         n = 0
         for listing in source.fetch_changed(since):
             row = listing.model_dump()
-            row["search_text"] = build_search_text(listing, cfg.features)
+            row["search_text"] = build_search_text(listing, cfg.features, cfg.moderation)
             conn.execute(UPSERT, row)
             n += 1
         removed = list(source.fetch_removed(since))

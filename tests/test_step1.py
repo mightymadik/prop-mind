@@ -55,3 +55,7 @@ def test_search_text_puts_fields_before_description():
         "2-комнатная квартира, продажа, 64 м², ЖК Хан Тенгри, Бостандыкский район, Алматы, "
         "с ремонтом, рядом метро. Тихий двор."
     )
+    # набитое ключевыми словами описание в индекс не попадает — объект ищется только по полям
+    stuffed = listing.model_copy(update={"description": "вид на горы, горы, панорама, горы, вид на горы"})
+    assert build_search_text(stuffed, CFG.features, CFG.moderation).endswith("рядом метро. ")
+    assert build_search_text(listing, CFG.features, CFG.moderation).endswith("Тихий двор.")
