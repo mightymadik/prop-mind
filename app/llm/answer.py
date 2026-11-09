@@ -8,11 +8,12 @@ from dataclasses import dataclass, field
 
 import anthropic
 
-from app.config import AppConfig
+from app.config import AppConfig, CatalogConfig
 from app.costs import record
 from app.llm.client import load_prompt
 from app.moderation import ContactFilter, strip_contacts
-from app.schemas import SearchFilters
+from app.schemas import CatalogFilters, SearchFilters
+from app.search.catalog import ComplexHit
 
 PROMPT_FILE = "answer.md"
 REF = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")  # [3] и на всякий случай [1, 3]
@@ -61,6 +62,62 @@ def build_user_message(
     return "\n".join(lines)
 
 
+CATALOG_PROMPT_FILE = "answer_catalog.md"
+CATALOG_RELAX_TEXT = {
+    "features": "инфраструктура ЖК",
+    "payment": "способ покупки",
+    "finishing": "отделка",
+    "orientations": "стороны света",
+    "windows": "окна",
+    "views": "вид из окна",
+    "completion": "срок сдачи",
+    "districts": "район",
+}
+
+
+def millions(v: int) -> str:
+    """41500000 → «41,5» (млн, без единицы)."""
+    return f"{v / 1e6:.1f}".rstrip("0").rstrip(".").replace(".", ",")
+
+
+def num(v: float) -> str:
+    return f"{v:g}".replace(".", ",")
+
+
+def completion_text(c: dict) -> str:
+    return "дом сдан" if c["delivered"] else f"сдача {c['completion_quarter']} кв. {c['completion_year']}"
+
+
+def build_catalog_message(
+    query: str, filters: CatalogFilters, relaxed: list[str], hits: list[ComplexHit], cat: CatalogConfig
+) -> str:
+    shown = filters.model_dump(exclude_defaults=True, exclude={"semantic_query", "needs_clarification"})
+    lines = [
+        f"Запрос: {query}",
+        f"Условия запроса (фильтры, уже применены поиском): {shown or 'нет'}",
+        f"Смысловая часть (подтверждать описанием ЖК): {filters.semantic_query or 'нет'}",
+        "Ослаблено поиском: " + (", ".join(CATALOG_RELAX_TEXT.get(r, r) for r in relaxed) if relaxed else "ничего"),
+        "",
+        "Кандидаты — ЖК:" if hits else "Кандидатов нет: поиск ничего не нашёл.",
+    ]
+    for n, h in enumerate(hits, 1):
+        c = h.complex
+        infra = ", ".join(cat.complex_features.get(x, x) for x in c["features"]) or "-"
+        pay = ", ".join(cat.payment.get(x, x) for x in c["payment"]) or "-"
+        groups = "; ".join(
+            f"{g.rooms}-комн. — {g.count} шт., {num(g.area_min)}–{num(g.area_max)} м², "
+            f"{millions(g.price_min)}–{millions(g.price_max)} млн ₸"
+            for g in h.groups
+        )
+        lines.append(
+            f"[{n}] ЖК {c['name']} — {cat.classes.get(c['housing_class'], c['housing_class'])}, "
+            f"{c['district']} р-н, {c['city']}; {completion_text(c)}; инфраструктура: {infra}; покупка: {pay}"
+            f"\n    Свободные квартиры под запрос: {groups or 'нет'}"
+            f"\n    <description>{quote_description(c['description'])}</description>"
+        )
+    return "\n".join(lines)
+
+
 def quote_description(desc: str) -> str:
     """Описание — данные продавца: в одну строку и с экранированными < >, чтобы текст не мог закрыть
     тег <description>, начать «новую реплику» или строку кандидата [n] с новой строки."""
@@ -98,15 +155,46 @@ def generate_answer(
     client: anthropic.Anthropic | None = None,
 ) -> AnswerResult:
     """Стримит ответ; on_text получает куски текста по мере генерации (для SSE). Ссылки проверяются в конце."""
+    message = build_user_message(query, filters, relaxed, rows, cfg.features)
+    return _generate(message, [r[0] for r in rows], PROMPT_FILE, cfg, api_key, model, on_text, client)
+
+
+def generate_catalog_answer(
+    query: str,
+    filters: CatalogFilters,
+    relaxed: list[str],
+    hits: list[ComplexHit],
+    cfg: AppConfig,
+    api_key: str,
+    model: str | None = None,
+    on_text: Callable[[str], None] | None = None,
+    client: anthropic.Anthropic | None = None,
+) -> AnswerResult:
+    """Ответ по найденным ЖК (новостройки): ссылки [n] → source_id ЖК."""
+    message = build_catalog_message(query, filters, relaxed, hits, cfg.catalog)
+    ids = [h.complex["source_id"] for h in hits]
+    return _generate(message, ids, CATALOG_PROMPT_FILE, cfg, api_key, model, on_text, client)
+
+
+def _generate(
+    message: str,
+    ids: list[str],
+    prompt_file: str,
+    cfg: AppConfig,
+    api_key: str,
+    model: str | None,
+    on_text: Callable[[str], None] | None,
+    client: anthropic.Anthropic | None,
+) -> AnswerResult:
     model = model or cfg.answer.model
     mcfg = cfg.answer.models[model]
     client = client or anthropic.Anthropic(api_key=api_key or None)
     kwargs = dict(
         model=model,
         max_tokens=cfg.answer.max_tokens,
-        system=load_prompt(PROMPT_FILE),
+        system=load_prompt(prompt_file),
         thinking=mcfg.thinking,
-        messages=[{"role": "user", "content": build_user_message(query, filters, relaxed, rows, cfg.features)}],
+        messages=[{"role": "user", "content": message}],
     )
     if mcfg.fallbacks:
         stream_ctx = client.beta.messages.stream(**kwargs, fallbacks=mcfg.fallbacks, betas=[FALLBACK_BETA])
@@ -136,7 +224,7 @@ def generate_answer(
     fallback = any(b.type == "fallback" for b in msg.content) or (msg.model or model) != model
     if msg.stop_reason == "refusal":
         raw = "Не получилось подготовить ответ по этому запросу. Попробуйте переформулировать."
-    text, invalid, cited = resolve_refs(strip_contacts(raw, allowed), [r[0] for r in rows])
+    text, invalid, cited = resolve_refs(strip_contacts(raw, allowed), ids)
     return AnswerResult(
         model=model,
         text=text,

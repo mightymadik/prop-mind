@@ -8,16 +8,15 @@ from collections.abc import Callable
 from app.config import AppConfig, Settings
 from app.costs import track
 from app.db import connect
-from app.llm.answer import generate_answer
-from app.moderation import flagged
+from app.llm.answer import completion_text, generate_catalog_answer
+from app.moderation import is_stuffed, looks_injected
 from app.pii import mask_pii
-from app.pipeline import Retrieval, retrieve
-from app.schemas import SearchFilters
-from app.search.text import CONDITION_TEXT
+from app.pipeline import CatalogRetrieval, retrieve_catalog
+from app.schemas import CatalogFilters
+from app.search.catalog import ComplexHit
 
 log_ = logging.getLogger(__name__)
 Event = Callable[[str, dict], None]
-CARD_FIELDS = ("source_id", "price_kzt", "rooms", "area_m2", "district", "condition", "features", "description")
 
 LOG_SQL = """
 INSERT INTO query_log (query, filters, relaxed, clarification, result_source_ids, answer_model, fallback,
@@ -28,23 +27,47 @@ VALUES (%(query)s, %(filters)s, %(relaxed)s, %(clarification)s, %(result_source_
 """
 
 
-def card(row: tuple, cfg: AppConfig | None = None) -> dict:
-    d = dict(zip(CARD_FIELDS, row, strict=True))
-    d["area_m2"] = float(d["area_m2"]) if d["area_m2"] is not None else None
-    if cfg:  # подписи для интерфейса — из конфига, чтобы не дублировать словари в JS
-        d["condition_label"] = CONDITION_TEXT.get(d["condition"]) if d["condition"] else None
-        d["feature_labels"] = [cfg.features.get(f, f) for f in d["features"]]
-    return d
+def complex_card(h: ComplexHit, cfg: AppConfig) -> dict:
+    """Карточка ЖК для интерфейса: поля, подписи из конфига и группы свободных квартир под запрос."""
+    c, cat = h.complex, cfg.catalog
+    return {
+        "source_id": c["source_id"],
+        "name": c["name"],
+        "city": c["city"],
+        "district": c["district"],
+        "developer": c["developer"],
+        "class_label": cat.classes.get(c["housing_class"], c["housing_class"]),
+        "completion_label": completion_text(c),
+        "feature_labels": [cat.complex_features.get(x, x) for x in c["features"]],
+        "payment_labels": [cat.payment.get(x, x) for x in c["payment"]],
+        "description": c["description"],
+        "groups": [
+            {
+                "rooms": g.rooms,
+                "count": g.count,
+                "area_min": g.area_min,
+                "area_max": g.area_max,
+                "price_min": g.price_min,
+                "price_max": g.price_max,
+            }
+            for g in h.groups
+        ],
+    }
 
 
-def money(v: int) -> str:
-    return f"{v / 1e6:g} млн" if v >= 1_000_000 else f"{v // 1000} тыс"
+def flagged_complexes(hits: list[ComplexHit], cfg: AppConfig) -> list[str]:
+    """ЖК с признаками вставки или набивки в описании — на модерацию (query_log)."""
+    return [
+        h.complex["source_id"]
+        for h in hits
+        if looks_injected(h.complex["description"]) or is_stuffed(h.complex["description"], cfg.moderation)
+    ]
 
 
-def filter_chips(f: SearchFilters, cfg: AppConfig) -> list[str]:
-    """Распознанные условия короткими подписями — пользователь видит их, пока идёт поиск."""
+def catalog_chips(f: CatalogFilters, cfg: AppConfig) -> list[str]:
+    """Распознанные условия новостроек короткими подписями."""
+    cat = cfg.catalog
     chips = [f.city] if f.city else []
-    chips.append("аренда" if f.deal_type == "rent" else "покупка")
     if f.rooms:
         chips.append("/".join(map(str, f.rooms)) + " комн.")
     if f.price_min_kzt is not None and f.price_max_kzt is not None:
@@ -55,12 +78,41 @@ def filter_chips(f: SearchFilters, cfg: AppConfig) -> list[str]:
         chips.append(f"от {money(f.price_min_kzt)}")
     if f.area_min_m2:
         chips.append(f"от {f.area_min_m2:g} м²")
-    chips += [f"{d} р-н" for d in f.districts or []]
-    chips += [CONDITION_TEXT.get(c, c) for c in f.conditions or []]
-    chips += [cfg.features.get(x, x) for x in f.features]
+    if f.area_max_m2:
+        chips.append(f"до {f.area_max_m2:g} м²")
+    chips += [f"{d} р-н" for d in f.districts]
+    chips += [cat.classes.get(x, x) for x in f.classes]
+    if f.delivered_only:
+        chips.append("дом сдан")
+    elif f.completion_max_year:
+        chips.append(f"сдача до {f.completion_max_quarter or 4} кв. {f.completion_max_year}")
+    if f.not_first_floor:
+        chips.append("не первый этаж")
+    if f.not_last_floor:
+        chips.append("не последний этаж")
+    if f.floor_min is not None and f.floor_max is not None:
+        chips.append(f"этаж {f.floor_min}–{f.floor_max}")
+    elif f.floor_min is not None:
+        chips.append(f"этаж от {f.floor_min}")
+    elif f.floor_max is not None:
+        chips.append(f"этаж до {f.floor_max}")
+    for values, labels in (
+        (f.finishing, cat.finishing),
+        (f.windows, cat.windows),
+        (f.views, cat.views),
+        (f.features, cat.complex_features),
+        (f.payment, cat.payment),
+    ):
+        chips += [labels.get(x, x) for x in values]
+    if f.orientations:
+        chips.append("окна на " + "/".join(cat.orientations.get(x, x) for x in f.orientations))
     if f.semantic_query:
         chips.append(f"«{f.semantic_query}»")
     return chips
+
+
+def money(v: int) -> str:
+    return f"{v / 1e6:g} млн" if v >= 1_000_000 else f"{v // 1000} тыс"
 
 
 def run_search(query: str, cfg: AppConfig, settings: Settings, on_event: Event | None = None) -> dict:
@@ -68,18 +120,18 @@ def run_search(query: str, cfg: AppConfig, settings: Settings, on_event: Event |
     emit = on_event or (lambda name, data: None)
     t0 = time.perf_counter()
     payload: dict = {"query": query, "error": None}
-    r: Retrieval | None = None
+    r: CatalogRetrieval | None = None
     answer = None
     with track() as ledger:
         try:
 
-            def on_filters(f: SearchFilters) -> None:
+            def on_filters(f: CatalogFilters) -> None:
                 payload["filters"] = f.model_dump(exclude_defaults=True)
-                payload["chips"] = filter_chips(f, cfg)
+                payload["chips"] = catalog_chips(f, cfg)
                 emit("filters", {"filters": payload["filters"], "chips": payload["chips"]})
 
             with connect() as conn:
-                r = retrieve(
+                r = retrieve_catalog(
                     conn,
                     query,
                     cfg,
@@ -92,16 +144,16 @@ def run_search(query: str, cfg: AppConfig, settings: Settings, on_event: Event |
                 emit("clarification", {"text": r.clarification})
             else:
                 payload["relaxed"] = r.relaxed
-                payload["results"] = [card(row, cfg) for row in r.rows]
-                payload["flagged"] = flagged(r.rows, cfg.moderation)  # на модерацию; пользователю не показываем
+                payload["results"] = [complex_card(h, cfg) for h in r.hits]
+                payload["flagged"] = flagged_complexes(r.hits, cfg)  # на модерацию; пользователю не показываем
                 # номер [n] в тексте ответа = n-й объект этого списка
                 emit("results", {"relaxed": r.relaxed, "results": payload["results"]})
                 emit("status", {"stage": "answer"})
-                answer = generate_answer(
+                answer = generate_catalog_answer(
                     query,
                     r.filters,
                     r.relaxed,
-                    r.rows,
+                    r.hits,
                     cfg,
                     settings.anthropic_api_key,
                     on_text=lambda chunk: emit("delta", {"text": chunk}),
@@ -133,14 +185,14 @@ def run_search(query: str, cfg: AppConfig, settings: Settings, on_event: Event |
     return payload
 
 
-def log(payload: dict, r: Retrieval | None, answer) -> None:
+def log(payload: dict, r: CatalogRetrieval | None, answer) -> None:
     """Запись в query_log — и при ошибке запроса. Текст запроса — после маскирования ПДн."""
     row = {
         "query": mask_pii(payload["query"]),
         "filters": json.dumps(payload.get("filters"), ensure_ascii=False) if payload.get("filters") else None,
         "relaxed": payload.get("relaxed"),
         "clarification": payload.get("clarification"),
-        "result_source_ids": [x[0] for x in r.rows] if r else None,
+        "result_source_ids": [h.complex["source_id"] for h in r.hits] if r else None,
         "answer_model": answer.served_model if answer else None,
         "fallback": answer.fallback if answer else None,
         "invalid_refs": len(answer.invalid_refs) if answer else None,

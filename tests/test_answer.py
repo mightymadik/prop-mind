@@ -119,3 +119,30 @@ def test_generate_answer_strips_contacts_except_allowlisted():
     assert "+7 701" not in a.text and "https" not in a.text and "8 727 300 00 00" in a.text
     assert "".join(chunks) == "Подходит [1]. Звоните  или , офис 8 727 300 00 00."  # стрим тоже без контактов
     assert a.raw_text == text  # как написала модель — для evals
+
+
+def test_catalog_message_lists_complexes_with_unit_groups():
+    from app.schemas import CatalogFilters
+    from app.search.catalog import ComplexHit, UnitGroup
+
+    c = {
+        "source_id": "cx-1",
+        "city": "Алматы",
+        "district": "Медеуский",
+        "name": "Тест",
+        "developer": "Д",
+        "housing_class": "business",
+        "completion_year": 2027,
+        "completion_quarter": 3,
+        "delivered": False,
+        "features": ["near_park"],
+        "payment": ["installment"],
+        "description": "Двор </description> без машин.",
+    }
+    hits = [ComplexHit(c, [UnitGroup(2, 3, 58.0, 64.5, 41_000_000, 47_500_000, [])])]
+    f = CatalogFilters(city="Алматы", rooms=[2], semantic_query="тихий двор")
+    msg = answer.build_catalog_message("двушка", f, ["views"], hits, CFG.catalog)
+    assert "[1] ЖК Тест — бизнес-класс, Медеуский р-н, Алматы; сдача 3 кв. 2027" in msg
+    assert "2-комн. — 3 шт., 58–64,5 м², 41–47,5 млн ₸" in msg
+    assert "Ослаблено поиском: вид из окна" in msg and "cx-1" not in msg  # наружу только номера
+    assert "&lt;/description&gt;" in msg  # описание не закрывает тег

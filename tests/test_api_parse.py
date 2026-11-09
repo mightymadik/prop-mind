@@ -61,18 +61,20 @@ def test_search_errors(monkeypatch):
     assert client.post("/search", json={"query": ""}).status_code == 422
 
 
-def test_listing_card(monkeypatch):
+def test_complex_card(monkeypatch):
     import psycopg
 
     from app.db import connect
 
     monkeypatch.setattr(main, "connect", connect)  # карточке нужна настоящая база
     try:
-        r = client.get("/listings/syn-00001")
+        r = client.get("/complexes/cx-001")
     except psycopg.OperationalError:
         pytest.skip("нет базы")
-    assert r.status_code == 200 and r.json()["source_id"] == "syn-00001" and "embedding" not in r.json()
-    assert client.get("/listings/no-such-id").status_code == 404
+    d = r.json()
+    assert r.status_code == 200 and d["source_id"] == "cx-001" and "embedding" not in d and "search_text" not in d
+    assert d["units"] and all(isinstance(u["area_m2"], float) for u in d["units"])
+    assert client.get("/complexes/no-such-id").status_code == 404
 
 
 def test_rate_limit_per_ip(monkeypatch):

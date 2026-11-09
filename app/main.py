@@ -28,24 +28,31 @@ cfg = load_config(get_settings().config_path)
 limiter = RateLimiter(cfg.limits.requests_per_minute_per_ip)
 BUDGET_EXHAUSTED = "Лимит демо на сегодня исчерпан — попробуйте завтра."
 
-LISTING_SQL = """SELECT source_id, city, district, complex_name, deal_type, rooms, area_m2, floor, floors_total,
-                        year_built, condition, price_kzt, features, description
-                 FROM listings WHERE source_id = %s"""
-LISTING_FIELDS = (
+COMPLEX_FIELDS = (
     "source_id",
     "city",
     "district",
-    "complex_name",
-    "deal_type",
+    "name",
+    "developer",
+    "housing_class",
+    "completion_year",
+    "completion_quarter",
+    "delivered",
+    "features",
+    "payment",
+    "description",
+)
+UNIT_FIELDS = (
+    "source_id",
     "rooms",
     "area_m2",
     "floor",
     "floors_total",
-    "year_built",
-    "condition",
     "price_kzt",
-    "features",
-    "description",
+    "finishing",
+    "windows",
+    "view",
+    "orientation",
 )
 
 
@@ -76,13 +83,16 @@ def health() -> dict:
     s = get_settings()
     try:
         with connect() as conn:
-            listings = conn.execute("SELECT count(*) FROM listings").fetchone()[0]
+            complexes, units = conn.execute(
+                "SELECT (SELECT count(*) FROM complexes), (SELECT count(*) FROM units WHERE status = 'free')"
+            ).fetchone()
         db = "ok"
     except Exception as e:  # noqa: BLE001 — health отдаёт причину, а не 500
-        db, listings = f"error: {e.__class__.__name__}", None
+        db, complexes, units = f"error: {e.__class__.__name__}", None, None
     return {
         "db": db,
-        "listings": listings,
+        "complexes": complexes,
+        "free_units": units,
         "anthropic_key": bool(s.anthropic_api_key),
         "voyage_key": bool(s.voyage_api_key),
     }
@@ -98,14 +108,21 @@ def parse(body: QueryIn, request: Request) -> SearchFilters:
         raise HTTPException(502, f"parser failed: {e.__class__.__name__}") from e
 
 
-@app.get("/listings/{source_id}")
-def listing(source_id: str) -> dict:
+@app.get("/complexes/{source_id}")
+def complex_card(source_id: str) -> dict:
+    """Карточка ЖК и его свободные квартиры — для сайта, который открывает объект из виджета."""
     with connect() as conn:
-        row = conn.execute(LISTING_SQL, (source_id,)).fetchone()
-    if row is None:
-        raise HTTPException(404, "listing not found")
-    d = dict(zip(LISTING_FIELDS, row, strict=True))
-    d["area_m2"] = float(d["area_m2"]) if d["area_m2"] is not None else None
+        row = conn.execute(f"SELECT {', '.join(COMPLEX_FIELDS)} FROM complexes WHERE source_id = %s", (source_id,))
+        row = row.fetchone()
+        if row is None:
+            raise HTTPException(404, "complex not found")
+        units = conn.execute(
+            f"SELECT {', '.join(UNIT_FIELDS)} FROM units WHERE complex_id = %s AND status = 'free' "
+            "ORDER BY rooms, price_kzt, source_id",
+            (source_id,),
+        ).fetchall()
+    d = dict(zip(COMPLEX_FIELDS, row, strict=True))
+    d["units"] = [dict(zip(UNIT_FIELDS, u, strict=True)) | {"area_m2": float(u[2])} for u in units]
     return d
 
 
