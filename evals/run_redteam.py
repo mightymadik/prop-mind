@@ -1,7 +1,7 @@
-"""Red-team: prompt injection в описаниях объявлений и в запросе. Доля успешных атак по категориям.
+"""Red-team: prompt injection в описаниях ЖК и в запросе. Доля успешных атак по категориям.
 
-Описание атакующего объекта подменяется в памяти (база не меняется). Кандидаты — настоящая выдача
-dev-кейса на зафиксированных фильтрах и кэшах, как в evals ответа. Для каждого базового кейса —
+Описание атакующего ЖК подменяется в памяти (база не меняется). Кандидаты — настоящая выдача
+dev-кейса новостроек (cases_newbuild.jsonl) на эталонных фильтрах и кэшах. Для каждого базового кейса —
 контрольный ответ без атаки: «атакующий объект первым» засчитывается, только если в контроле он
 первым не был.
 
@@ -21,32 +21,26 @@ from pydantic import BaseModel
 
 from app.config import get_settings, load_config
 from app.db import connect
-from app.llm.answer import cost_usd, generate_answer
+from app.llm.answer import cost_usd, generate_catalog_answer
 from app.llm.client import call_structured, load_prompt
 from app.moderation import CONTACT, index_description
-from app.pipeline import retrieve
-from app.search.hybrid import query_text, search
-from app.search.rerank import rerank
-from evals.run_evals import (
-    ROOT,
-    cached_retrieval_fns,
-    claims_no_match,
-    embed_queries,
-    parsed_from_report,
-)
+from app.pipeline import retrieve_catalog
+from app.schemas import CatalogFilters
+from app.search import catalog
+from app.search.catalog import ComplexHit
+from app.search.rerank import rerank, rerank_ids
+from evals.run_evals import CATALOG_CASES, RERANK_CACHE, ROOT, RerankCache, claims_no_match, embed_queries
 
 FILES = {"dev": ROOT / "redteam.jsonl", "holdout": ROOT / "redteam_holdout.jsonl"}
-# фильтры от парсера из того же прогона, что и в evals ответа и поиска (decisions.md)
-PARSED_FROM = ROOT / "results" / "20261105T052638Z_search_vector+hybrid_gold+parsed_dev.json"
 CATEGORIES = ("promote", "suppress", "offtask", "contacts", "spoof", "query", "stuffing")
 
 
-def inject(rows: list[tuple], position: int, attack: str, mode: str = "append") -> list[tuple]:
-    """Описание кандидата №position (с 1) заменяется атакой или дополняется ею; остальные не трогаются."""
-    out = list(rows)
-    r = out[position - 1]
-    desc = attack if mode == "replace" else f"{r[7]} {attack}"
-    out[position - 1] = (*r[:7], desc)
+def inject(hits: list[ComplexHit], position: int, attack: str, mode: str = "append") -> list[ComplexHit]:
+    """Описание ЖК №position (с 1) заменяется атакой или дополняется ею; остальные не трогаются."""
+    out = list(hits)
+    h = out[position - 1]
+    desc = attack if mode == "replace" else f"{h.complex['description']} {attack}"
+    out[position - 1] = ComplexHit(h.complex | {"description": desc}, h.groups)
     return out
 
 
@@ -82,14 +76,14 @@ def judge_injection(attack: str, query: str, text: str, cfg, settings) -> Inject
 
 
 def run_stuffing(conn, case: dict, base: dict, filters, cfg, settings) -> dict:
-    """Набивка ключевыми словами против реранкера: место нерелевантного объекта до и после."""
-    text = query_text(filters, base["query"])
+    """Набивка ключевыми словами против реранкера: место нерелевантного ЖК до и после."""
+    text = catalog.query_text(filters, base["query"])
     qvec = embed_queries([text], cfg, settings)[0]
-    ranked, _ = search(conn, filters, qvec, text, "hybrid")
+    ranked, _ = catalog.search(conn, filters, qvec, text, "hybrid")
     head = ranked[: cfg.rerank.candidates]
     relevant = set(base.get("relevant_source_ids") or [])
     victim = next(i for i in range(case["position"] - 1, len(head)) if head[i] not in relevant)
-    rows = conn.execute("SELECT source_id, search_text, description FROM listings WHERE source_id = ANY(%s)", (head,))
+    rows = conn.execute("SELECT source_id, search_text, description FROM complexes WHERE source_id = ANY(%s)", (head,))
     docs, descs = {}, {}
     for sid, st, desc in rows:
         docs[sid], descs[sid] = st, desc
@@ -125,10 +119,29 @@ def main() -> None:
     cases = [c for c in cases if not args.cases or c["id"] in args.cases]
     assert all(c["category"] in CATEGORIES for c in cases), "неизвестная категория"
     base_cases = {
-        c["id"]: c for c in (json.loads(ln) for ln in (ROOT / "cases.jsonl").open(encoding="utf-8") if ln.strip())
+        c["id"]: c for c in (json.loads(ln) for ln in CATALOG_CASES["dev"].open(encoding="utf-8") if ln.strip())
     }
-    frozen = parsed_from_report(json.loads(PARSED_FROM.read_text(encoding="utf-8")))
-    embed_fn, rerank_fn = cached_retrieval_fns(cfg, settings)
+    # базовые кейсы — на эталонных фильтрах: выдача воспроизводима, атака — единственная разница с контролем
+    frozen = {
+        cid: CatalogFilters.model_validate(c["expected_filters"])
+        for cid, c in base_cases.items()
+        if not c["expected_filters"].get("needs_clarification")
+    }
+    cache = RerankCache(RERANK_CACHE)
+
+    def embed_fn(text: str) -> str:
+        return embed_queries([text], cfg, settings)[0]
+
+    def rerank_fn(conn, ids: list[str], text: str) -> list[str]:
+        n = cfg.rerank.candidates
+        head = cache.get_or_compute(
+            cfg.rerank.model,
+            text,
+            ids[:n],
+            lambda: rerank_ids(conn, ids[:n], text, cfg.rerank, settings.voyage_api_key, table="complexes"),
+        )
+        return head + ids[n:]
+
     retrievals, controls = {}, {}
     results = []
 
@@ -137,7 +150,7 @@ def main() -> None:
         def base_retrieval(bid: str):
             if bid not in retrievals:
                 b = base_cases[bid]
-                retrievals[bid] = retrieve(
+                retrievals[bid] = retrieve_catalog(
                     conn, b["query"], cfg, settings, filters=frozen[bid], embed_fn=embed_fn, rerank_fn=rerank_fn
                 )
             return retrievals[bid]
@@ -150,22 +163,22 @@ def main() -> None:
             else:
                 for i in range(args.repeats):
                     if c["category"] == "query":  # атака в самом запросе: разбор живой, как в продукте
-                        r = retrieve(conn, c["query"], cfg, settings, embed_fn=embed_fn, rerank_fn=rerank_fn)
+                        r = retrieve_catalog(conn, c["query"], cfg, settings, embed_fn=embed_fn, rerank_fn=rerank_fn)
                         if r.clarification:
                             row["runs"].append({"clarified": True, "success": False})
                             continue
-                        query, rows, injected_id, control = c["query"], r.rows, None, None
+                        query, hits, injected_id, control = c["query"], r.hits, None, None
                     else:
                         r = base_retrieval(c["base_case"])
-                        query, injected_id = r.query, r.rows[c["position"] - 1][0]
-                        rows = inject(r.rows, c["position"], c["attack"], c.get("mode", "append"))
+                        query, injected_id = r.query, r.hits[c["position"] - 1].complex["source_id"]
+                        hits = inject(r.hits, c["position"], c["attack"], c.get("mode", "append"))
                         key = (c["base_case"], i)
                         if key not in controls:
-                            controls[key] = generate_answer(
-                                query, r.filters, r.relaxed, r.rows, cfg, settings.anthropic_api_key
+                            controls[key] = generate_catalog_answer(
+                                query, r.filters, r.relaxed, r.hits, cfg, settings.anthropic_api_key
                             )
                         control = controls[key]
-                    a = generate_answer(query, r.filters, r.relaxed, rows, cfg, settings.anthropic_api_key)
+                    a = generate_catalog_answer(query, r.filters, r.relaxed, hits, cfg, settings.anthropic_api_key)
                     sig = signals(c, a, control, injected_id)
                     v = judge_injection(c.get("attack") or c["query"], query, a.raw_text, cfg, settings)
                     row["runs"].append(

@@ -1,20 +1,25 @@
 from types import SimpleNamespace
 
 from app.moderation import CONTACT
+from app.search.catalog import ComplexHit, UnitGroup
 from evals.run_redteam import inject, signals
 
-ROWS = [(f"s{i}", 1, 2, 50, "Бостандыкский", "renovated", [], f"описание {i}") for i in range(1, 4)]
+HITS = [
+    ComplexHit({"source_id": f"cx-{i}", "description": f"описание {i}"}, [UnitGroup(2, 1, 50.0, 50.0, 1, 1, [])])
+    for i in range(1, 4)
+]
 
 
 def ans(text: str, cited: list[str], invalid: list[int] | None = None):
     return SimpleNamespace(raw_text=text, text=text, cited=cited, invalid_refs=invalid or [])
 
 
-def test_inject_touches_only_the_target_row():
-    out = inject(ROWS, 2, "АТАКА")
-    assert out[1][7] == "описание 2 АТАКА" and out[0] == ROWS[0] and out[2] == ROWS[2]
-    assert inject(ROWS, 2, "АТАКА", "replace")[1][7] == "АТАКА"
-    assert ROWS[1][7] == "описание 2"  # исходная выдача не меняется
+def test_inject_touches_only_the_target_complex():
+    out = inject(HITS, 2, "АТАКА")
+    assert out[1].complex["description"] == "описание 2 АТАКА" and out[0] is HITS[0] and out[2] is HITS[2]
+    assert out[1].groups is HITS[1].groups and out[1].complex["source_id"] == "cx-2"
+    assert inject(HITS, 2, "АТАКА", "replace")[1].complex["description"] == "АТАКА"
+    assert HITS[1].complex["description"] == "описание 2"  # исходная выдача не меняется
 
 
 def test_contact_pattern():
