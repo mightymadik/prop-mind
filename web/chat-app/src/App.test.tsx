@@ -3,11 +3,13 @@ import { App } from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { EXAMPLES } from "./components/EmptyState";
 import { readParams } from "./params";
-import type { Listing } from "./types";
+import type { Complex } from "./types";
 
-const listing = (id: string, price: number): Listing => ({
-  source_id: id, price_kzt: price, rooms: 2, area_m2: 55, district: "Медеуский", condition: "renovated",
-  condition_label: "с ремонтом", features: ["parking"], feature_labels: ["паркинг"], description: `Тихий двор ${price}`,
+const listing = (id: string, price: number): Complex => ({
+  source_id: id, name: `Тест ${price}`, city: "Алматы", district: "Медеуский", developer: "Тест Строй",
+  class_label: "бизнес-класс", completion_label: "сдача 3 кв. 2027", feature_labels: ["подземный паркинг"],
+  payment_labels: ["рассрочка от застройщика"], description: `Тихий двор ${price}`,
+  groups: [{ rooms: 2, count: 3, area_min: 58, area_max: 64.5, price_min: price, price_max: price + 6_500_000 }],
 });
 const RESULTS = [listing("syn-1", 40_000_000), listing("syn-2", 45_000_000)];
 
@@ -34,7 +36,7 @@ const FULL: Ev[] = [
 ];
 
 // calls — только запросы поиска; /health (число объектов на пустом экране) отвечает отдельно
-function mockFetch(handler: (init: RequestInit) => Response, health: Response = Response.json({ listings: 1048 })) {
+function mockFetch(handler: (init: RequestInit) => Response, health: Response = Response.json({ complexes: 70, free_units: 2058 })) {
   const calls: RequestInit[] = [];
   vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
     if (url === "/health") return health;
@@ -64,13 +66,13 @@ afterEach(() => {
 test("empty screen: greeting and examples; clicking an example sends it", async () => {
   const calls = mockFetch(() => sse(FULL));
   render(<App params={readParams("")} />);
-  expect(screen.getByRole("heading", { name: "Найдём квартиру по описанию" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Найдём квартиру в новостройке по описанию" })).toBeTruthy();
   expect(within(screen.getByRole("list", { name: "Примеры запросов" })).getAllByRole("button")).toHaveLength(EXAMPLES.length);
   await act(async () => {
     fireEvent.click(screen.getByRole("button", { name: `${EXAMPLES[0].kind}: ${EXAMPLES[0].query}` }));
   });
   expect(JSON.parse(calls[0].body as string).query).toBe(EXAMPLES[0].query);
-  expect(screen.queryByRole("heading", { name: "Найдём квартиру по описанию" })).toBeNull();
+  expect(screen.queryByRole("heading", { name: "Найдём квартиру в новостройке по описанию" })).toBeNull();
   expect(within(turns()[0]).getByText(EXAMPLES[0].query).closest(".msg")!.classList.contains("user")).toBe(true);
 });
 
@@ -79,7 +81,7 @@ test("empty screen: example cards are labelled by type; the stats line shows N f
   render(<App params={readParams("")} />);
   const examples = within(screen.getByRole("list", { name: "Примеры запросов" })).getAllByRole("button");
   expect(examples.map((b) => b.textContent)).toEqual(EXAMPLES.map((e) => e.kind + e.query));
-  expect(await screen.findByText("1 048 объектов · Алматы и Астана · демо-данные")).toBeTruthy();
+  expect(await screen.findByText("70 ЖК · 2 058 свободных квартир · Алматы и Астана · демо-данные")).toBeTruthy();
 });
 
 test("no stats line when /health fails", async () => {
@@ -98,14 +100,16 @@ test("stream: user bubble, chips, cards with badges, streamed answer with links 
   expect(JSON.parse(calls[0].body as string)).toEqual({ query: "двушка в Алматы", site_key: "pub_demo" });
   const turn = turns()[0];
   expect(within(turn).getByText("Алматы")).toBeTruthy();
-  const cards = turn.querySelectorAll(".listing");
+  const cards = turn.querySelectorAll(".complex");
   expect(cards).toHaveLength(2);
-  expect(within(cards[0] as HTMLElement).getByText("с ремонтом").dataset.variant).toBe("outline"); // состояние — акцентный бейдж
-  expect(within(cards[0] as HTMLElement).getByText("паркинг").dataset.variant).toBe("secondary");
+  expect(within(cards[0] as HTMLElement).getByText("рассрочка от застройщика").dataset.variant).toBe("outline"); // способ покупки — акцентный бейдж
+  expect(within(cards[0] as HTMLElement).getByText("подземный паркинг").dataset.variant).toBe("secondary");
+  expect(within(cards[0] as HTMLElement).getByText("2-комн. · 58–64,5 м² · 40–46,5 млн ₸ · 3 свободных")).toBeTruthy();
+  expect(within(cards[0] as HTMLElement).getByText("бизнес-класс · Медеуский р-н · сдача 3 кв. 2027")).toBeTruthy();
   const links = within(turn).getAllByRole("link");
   expect(links.map((a) => a.textContent)).toEqual(["№ 2", "№ 1"]);
   expect(turn.querySelector(".answer-text")!.textContent).not.toMatch(/syn-/);
-  expect(within(turn).getByText(/Подборка · 2 варианта/)).toBeTruthy();
+  expect(within(turn).getByText(/Подборка · 2 ЖК/)).toBeTruthy();
 
   vi.useFakeTimers();
   fireEvent.click(links[0]);
@@ -150,7 +154,7 @@ test("Enter sends, Shift+Enter does not; empty input does not send", async () =>
 
 test("search button: disabled when empty, 'Ищу…' while busy; counter appears near the limit", async () => {
   let close: () => void = () => {};
-  vi.stubGlobal("fetch", vi.fn(async (url: string) => url === "/health" ? Response.json({ listings: 1 }) : new Response(new ReadableStream<Uint8Array>({
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => url === "/health" ? Response.json({ complexes: 1, free_units: 1 }) : new Response(new ReadableStream<Uint8Array>({
     start(c) {
       close = () => c.close();
     },
@@ -177,7 +181,7 @@ test("clarification is shown as the assistant's question", async () => {
   await ask("у метро в Астане");
   const msg = turns()[0].querySelector(".msg.assistant")!;
   expect(within(msg as HTMLElement).getByRole("status").textContent).toBe("Метро есть только в Алматы. Искать там?");
-  expect(msg.querySelector(".listing")).toBeNull();
+  expect(msg.querySelector(".complex")).toBeNull();
 });
 
 test("own query scrolls to the bottom even if the user scrolled up", async () => {
@@ -297,12 +301,12 @@ test("embed: no header; card click posts the listing to the host origin only", a
   expect(post).not.toHaveBeenCalled();
 });
 
-test("older API without chips/labels/status does not blank the page", async () => {
-  const old = RESULTS.map(({ feature_labels: _f, condition_label: _c, ...rest }) => rest);
+test("API without labels, groups or status does not blank the page", async () => {
+  const old = RESULTS.map(({ feature_labels: _f, payment_labels: _p, groups: _g, ...rest }) => rest);
   mockFetch(() => sse([["filters", { filters: { city: "Алматы" } }], ["results", { results: old }], ["answer", { text: "Подходит [syn-1]" }], ["done", {}]]));
   render(<App params={readParams("")} />);
   await ask("двушка");
-  expect(document.querySelectorAll(".listing")).toHaveLength(2);
+  expect(document.querySelectorAll(".complex")).toHaveLength(2);
   expect(screen.getByRole("link").textContent).toBe("№ 1");
   expect(input()).toBeTruthy();
 });

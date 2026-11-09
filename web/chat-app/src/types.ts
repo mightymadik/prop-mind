@@ -1,21 +1,33 @@
 // Формат событий и ответа POST /search (см. app/service.py).
-export interface Listing {
+// Свободные квартиры ЖК с одним числом комнат, подходящие под запрос.
+export interface UnitGroup {
+  rooms: number;
+  count: number;
+  area_min: number;
+  area_max: number;
+  price_min: number;
+  price_max: number;
+}
+
+// Карточка ЖК (новостройки): номер [n] в ответе ссылается на ЖК.
+export interface Complex {
   source_id: string;
-  price_kzt: number;
-  rooms: number | null;
-  area_m2: number | null;
-  district: string | null;
-  condition: string | null;
-  condition_label: string | null;
-  features: string[];
+  name: string;
+  city: string;
+  district: string;
+  developer: string;
+  class_label: string;
+  completion_label: string;
   feature_labels: string[];
+  payment_labels: string[];
   description: string;
+  groups: UnitGroup[];
 }
 
 export type SearchEvent =
   | { name: "status"; data: { stage: string } }
   | { name: "filters"; data: { filters: Record<string, unknown>; chips: string[] } }
-  | { name: "results"; data: { relaxed: string[]; results: Listing[] } }
+  | { name: "results"; data: { relaxed: string[]; results: Complex[] } }
   | { name: "delta"; data: { text: string } }
   | { name: "answer"; data: { text: string; invalid_refs: number[]; cited: string[] } }
   | { name: "clarification"; data: { text: string } }
@@ -25,7 +37,7 @@ export type SearchEvent =
 export interface SearchPayload {
   chips?: string[];
   relaxed?: string[];
-  results?: Listing[];
+  results?: Complex[];
   answer?: string;
   clarification?: string;
 }

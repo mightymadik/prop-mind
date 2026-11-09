@@ -1,6 +1,6 @@
 // Виджет поиска квартир: кнопка + окно с чатом в iframe. Подключение одной строкой:
 //   <script src="https://<домен>/widget.js" data-site-key="pub_demo" defer></script>
-// Клик по объекту в чате → событие "prop-mind:listing" на window сайта: { detail: { source_id } }.
+// Клик по карточке ЖК в чате → событие "prop-mind:listing" на window сайта: { detail: { source_id } } (id ЖК).
 // Если у сайта своя CSP — разрешить домен виджета в script-src, style-src и frame-src.
 (() => {
   const script = document.currentScript;

@@ -1,4 +1,4 @@
-import type { Listing, SearchEvent, SearchPayload } from "./types";
+import type { Complex, SearchEvent, SearchPayload } from "./types";
 
 // Этапы ответа в порядке прохождения; подписи — в StageSteps.
 export const STAGE_ORDER = ["parse", "search", "rerank", "answer"] as const;
@@ -8,7 +8,7 @@ export interface Reply {
   busy: boolean;
   stage: Stage | null; // текущий этап; null — ещё не начался или уже закончился
   chips: string[];
-  results: Listing[] | null; // null — ждём выдачу (заглушки), [] — пусто
+  results: Complex[] | null; // null — ждём выдачу (заглушки), [] — пусто
   answer: string;
   clarification: string | null; // вопрос парсера — показываем как вопрос ассистента
   error: string | null;

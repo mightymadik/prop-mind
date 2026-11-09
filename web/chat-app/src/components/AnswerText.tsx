@@ -1,9 +1,9 @@
 import { segmentAnswer } from "../lib/refs";
-import type { Listing } from "../types";
+import type { Complex } from "../types";
 
 interface Props {
   text: string;
-  results: Listing[];
+  results: Complex[];
   onRef: (sourceId: string) => void;
 }
 

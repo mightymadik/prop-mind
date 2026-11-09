@@ -1,23 +1,23 @@
 import { useEffect, useState } from "react";
 import { ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { listingsCount } from "../lib/api";
+import { catalogCounts } from "../lib/api";
 import { plural } from "../lib/plural";
 
 export const EXAMPLES = [
-  { kind: "Покупка", query: "Двушка в Алматы до 40 млн с ремонтом" },
-  { kind: "Аренда", query: "Сниму однушку в Астане с мебелью до 250 тыс" },
-  { kind: "По смыслу", query: "Трёшка рядом со школой, тихий двор" },
-  { kind: "По смыслу", query: "Квартира с видом на горы в Медеуском районе" },
+  { kind: "Покупка", query: "Двушка в Алматы до 50 млн с чистовой отделкой" },
+  { kind: "Рассрочка", query: "Трёшка в Астане в рассрочку, сдача до конца 2027" },
+  { kind: "Вид из окна", query: "Квартира с видом на горы, не первый этаж" },
+  { kind: "По смыслу", query: "Тихий ЖК для семьи с детьми, рядом школа" },
 ];
 
 const nf = new Intl.NumberFormat("ru-RU");
 
 export function EmptyState({ onPick, disabled }: { onPick: (q: string) => void; disabled: boolean }) {
-  const [count, setCount] = useState<number | null>(null);
+  const [count, setCount] = useState<{ complexes: number; units: number } | null>(null);
   useEffect(() => {
     let alive = true;
-    listingsCount().then((n) => alive && setCount(n));
+    catalogCounts().then((n) => alive && setCount(n));
     return () => {
       alive = false;
     };
@@ -26,15 +26,16 @@ export function EmptyState({ onPick, disabled }: { onPick: (q: string) => void; 
   return (
     <div className="mt-[min(8vh,64px)] max-sm:mt-6">
       <h1 className="mb-3 font-serif text-[clamp(1.9rem,1.4rem+2vw,2.7rem)] leading-[1.12] font-bold tracking-tight">
-        Найдём квартиру по описанию
+        Найдём квартиру в новостройке по описанию
       </h1>
       <p className="max-w-[54ch] text-[1.05rem] text-muted-foreground">
-        Напишите, что для вас важно — район, бюджет, двор, вид из окна. Подберём объявления из базы и коротко
-        объясним, чем каждое подходит.
+        Напишите, что для вас важно — район, бюджет, срок сдачи, вид из окна, двор. Подберём жилые комплексы
+        и свободные квартиры в них и коротко объясним, чем каждый подходит.
       </p>
       {count !== null && (
         <p className="mt-2 text-sm text-muted-foreground">
-          {nf.format(count)} {plural(count, ["объект", "объекта", "объектов"])} · Алматы и Астана · демо-данные
+          {count.complexes} ЖК · {nf.format(count.units)} {plural(count.units, ["свободная квартира", "свободные квартиры", "свободных квартир"])} ·
+          Алматы и Астана · демо-данные
         </p>
       )}
       <ul aria-label="Примеры запросов" className="mt-7 grid gap-3 sm:grid-cols-2">

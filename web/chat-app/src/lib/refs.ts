@@ -1,4 +1,4 @@
-import type { Listing } from "../types";
+type Ref = { source_id: string };
 
 export type Segment = { kind: "text"; text: string } | { kind: "ref"; index: number; sourceId: string };
 
@@ -6,7 +6,7 @@ export type Segment = { kind: "text"; text: string } | { kind: "ref"; index: num
 const REF = /\[([^\]\s]+)\]/g;
 
 /** Текст ответа → куски текста и ссылки на карточки. Скобки, не указывающие на объект, остаются текстом. */
-export function segmentAnswer(text: string, results: Listing[]): Segment[] {
+export function segmentAnswer(text: string, results: Ref[]): Segment[] {
   const out: Segment[] = [];
   let last = 0;
   for (const m of text.matchAll(REF)) {

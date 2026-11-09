@@ -1,5 +1,5 @@
 import { chatReducer, emptyChat, type Chat } from "./state";
-import type { Listing, SearchEvent } from "./types";
+import type { Complex, SearchEvent } from "./types";
 
 const ev = (c: Chat, id: string, event: SearchEvent) => chatReducer(c, { type: "event", id, event });
 
@@ -8,7 +8,7 @@ test("stream: stages → chips → cards → deltas → answer → done, per tur
   expect(c.turns[0].reply).toMatchObject({ busy: true, stage: "parse", results: null });
   c = ev(c, "t1", { name: "status", data: { stage: "rerank" } });
   c = ev(c, "t1", { name: "filters", data: { filters: {}, chips: ["Алматы"] } });
-  c = ev(c, "t1", { name: "results", data: { relaxed: [], results: [{ source_id: "syn-1" } as Listing] } });
+  c = ev(c, "t1", { name: "results", data: { relaxed: [], results: [{ source_id: "syn-1" } as Complex] } });
   c = ev(c, "t1", { name: "delta", data: { text: "Подходит " } });
   c = ev(c, "t1", { name: "delta", data: { text: "[1]" } });
   expect(c.turns[0].reply).toMatchObject({ stage: "rerank", chips: ["Алматы"], answer: "Подходит [1]" });

@@ -1,7 +1,6 @@
-import type { Listing } from "../types";
 import { segmentAnswer } from "./refs";
 
-const L = (id: string) => ({ source_id: id }) as Listing;
+const L = (id: string) => ({ source_id: id });
 const results = [L("syn-1"), L("syn-2")];
 
 test("numbers while streaming and source_id in the final text map to cards", () => {

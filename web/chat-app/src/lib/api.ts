@@ -46,12 +46,13 @@ export async function searchOnce(query: string, siteKey: string | null): Promise
   return normalizePayload(await resp.json());
 }
 
-// Сколько объектов в базе — для строки под заголовком; любая ошибка → null, строку не показываем.
-export async function listingsCount(): Promise<number | null> {
+// Сколько ЖК и свободных квартир в базе — для строки под заголовком; любая ошибка → null, строку не показываем.
+export async function catalogCounts(): Promise<{ complexes: number; units: number } | null> {
   try {
     const resp = await fetch("/health");
-    const n = resp.ok ? (await resp.json())?.listings : null;
-    return Number.isInteger(n) && n > 0 ? n : null;
+    const d = resp.ok ? await resp.json() : null;
+    const ok = (n: unknown): n is number => Number.isInteger(n) && (n as number) > 0;
+    return ok(d?.complexes) && ok(d?.free_units) ? { complexes: d.complexes, units: d.free_units } : null;
   } catch {
     return null;
   }

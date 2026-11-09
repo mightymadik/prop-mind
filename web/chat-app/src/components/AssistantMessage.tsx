@@ -4,10 +4,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { plural } from "../lib/plural";
 import type { Reply } from "../state";
 import { AnswerText } from "./AnswerText";
-import { ListingCard } from "./ListingCard";
+import { ComplexCard } from "./ComplexCard";
 import { StageSteps } from "./StageSteps";
 
 interface Props {
@@ -23,7 +22,7 @@ interface Props {
 export const cardDomId = (turnId: string, sourceId: string) => `card-${turnId}-${sourceId}`;
 
 const LIST =
-  "grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3 max-sm:-mx-4 max-sm:flex max-sm:snap-x max-sm:snap-mandatory max-sm:scroll-px-4 max-sm:overflow-x-auto max-sm:px-4 max-sm:pb-2 max-sm:[scrollbar-width:none]";
+  "grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3 max-sm:-mx-4 max-sm:flex max-sm:snap-x max-sm:snap-mandatory max-sm:scroll-px-4 max-sm:overflow-x-auto max-sm:px-4 max-sm:pb-2 max-sm:[scrollbar-width:none]";
 
 export function AssistantMessage({ turnId, reply: r, highlighted, cardRefs, onRef, onSelect }: Props) {
   const results = r.results ?? [];
@@ -34,7 +33,7 @@ export function AssistantMessage({ turnId, reply: r, highlighted, cardRefs, onRe
         <CardContent className="flex flex-col gap-4 px-4 py-4 sm:px-5 sm:py-5">
           {found && (
             <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-              Подборка · {results.length} {plural(results.length, ["вариант", "варианта", "вариантов"])}
+              Подборка · {results.length} ЖК
             </p>
           )}
           {r.chips.length > 0 && (
@@ -70,21 +69,21 @@ export function AssistantMessage({ turnId, reply: r, highlighted, cardRefs, onRe
           {r.results === null ? (
             <ol className={LIST} aria-hidden="true">
               {[0, 1, 2].map((i) => (
-                <li key={i} className="max-sm:flex-[0_0_min(80%,300px)]">
+                <li key={i} className="max-sm:flex-[0_0_min(85%,320px)]">
                   <Skeleton className="h-40" />
                 </li>
               ))}
             </ol>
           ) : (
             found && (
-              <ol className={LIST} aria-label="Найденные квартиры">
+              <ol className={LIST} aria-label="Найденные ЖК">
                 {results.map((l, i) => {
                   const domId = cardDomId(turnId, l.source_id);
                   return (
-                    <ListingCard
+                    <ComplexCard
                       key={l.source_id}
                       domId={domId}
-                      listing={l}
+                      complex={l}
                       index={i}
                       highlighted={highlighted === domId}
                       onSelect={onSelect}

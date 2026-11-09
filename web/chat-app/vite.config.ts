@@ -10,7 +10,7 @@ export default defineConfig({
   build: { outDir: "dist", emptyOutDir: true, sourcemap: false },
   server: {
     // npm run dev: страница с горячей перезагрузкой, API — с локального uvicorn
-    proxy: { "/search": "http://localhost:8000", "/listings": "http://localhost:8000", "/health": "http://localhost:8000" },
+    proxy: { "/search": "http://localhost:8000", "/complexes": "http://localhost:8000", "/health": "http://localhost:8000" },
   },
   test: { environment: "jsdom", globals: true },
 });
