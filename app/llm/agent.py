@@ -118,7 +118,8 @@ class AgentResult:
     served_model: str | None = None
     fallback: bool = False
     rounds: int = 0
-    timings_ms: dict[str, int] = field(default_factory=dict)  # этапы поиска (сумма по вызовам), ttft, answer
+    timings_ms: dict[str, int] = field(default_factory=dict)  # этапы поиска (сумма), llm1, llm2…, answer
+    llm_calls: list[dict] = field(default_factory=list)  # по вызову модели: ms, input/output tokens, stop
     ttft_ms: int | None = None  # до первого токена финального ответа у пользователя
     total_ms: int = 0
     input_tokens: int = 0
@@ -241,12 +242,19 @@ def run_agent(
             ctx = client.beta.messages.stream(**kwargs, fallbacks=mcfg.fallbacks, betas=[FALLBACK_BETA])
         else:
             ctx = client.messages.stream(**kwargs)
+        t_call = time.perf_counter()
         with ctx as stream:
             for chunk in stream.text_stream:
                 if final:
                     say(chunk)
             msg = stream.get_final_message()
         res.rounds += 1
+        ms = int((time.perf_counter() - t_call) * 1000)
+        res.timings_ms[f"llm{res.rounds}"] = ms
+        u = msg.usage
+        res.llm_calls.append(
+            {"ms": ms, "input_tokens": u.input_tokens, "output_tokens": u.output_tokens, "stop_reason": msg.stop_reason}
+        )
         served = msg.model if msg.model in cfg.pricing else model
         record(served, msg.usage.input_tokens, msg.usage.output_tokens)
         res.input_tokens += msg.usage.input_tokens
@@ -276,9 +284,7 @@ def run_agent(
     if rest := guard.flush():
         emit("delta", {"text": rest})
     res.total_ms = int((time.perf_counter() - t0) * 1000)
-    res.timings_ms["answer"] = res.total_ms
-    if res.ttft_ms is not None:
-        res.timings_ms["ttft"] = res.ttft_ms
+    res.timings_ms["answer"] = res.total_ms  # ttft не пишем: финальный ответ обычно приходит одним куском
     res.raw_text = raw
     res.source_ids, res.hits = list(reg.ids), [reg.hits[i] for i in reg.ids]
     res.text, res.invalid_refs, res.cited = resolve_refs(strip_contacts(raw, cfg.moderation.allowed_contacts), reg.ids)

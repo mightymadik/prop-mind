@@ -130,6 +130,8 @@ def test_search_then_answer_maps_refs_and_streams_only_final(monkeypatch):
     )
     assert r.text == "Подходит [cx-2], ещё ." and r.invalid_refs == [9] and r.cited == ["cx-2"]
     assert r.source_ids == ["cx-1", "cx-2"] and r.tool_calls == ["search_listings"] and r.rounds == 2
+    assert set(r.timings_ms) == {"llm1", "llm2", "answer"} and "ttft" not in r.timings_ms
+    assert [c["output_tokens"] for c in r.llm_calls] == [20, 20] and r.llm_calls[0]["stop_reason"] == "tool_use"
     assert r.first_filters == SearchFilters(city="Алматы", rooms=[2])
     deltas = "".join(d["text"] for n, d in events if n == "delta")
     assert deltas == "Подходит [2], ещё [9]." and "Сейчас поищу" not in deltas  # промежуточный — не пользователю
