@@ -17,6 +17,7 @@ from app.search.catalog import ComplexHit
 
 REF = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")  # [3] и на всякий случай [1, 3]
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
+REFUSAL_TEXT = "Не получилось подготовить ответ по этому запросу. Попробуйте переформулировать."
 
 
 @dataclass
@@ -73,22 +74,26 @@ def build_user_message(
         "",
         "Кандидаты — ЖК:" if hits else "Кандидатов нет: поиск ничего не нашёл.",
     ]
-    for n, h in enumerate(hits, 1):
-        c = h.complex
-        infra = ", ".join(cat.complex_features.get(x, x) for x in c["features"]) or "-"
-        pay = ", ".join(cat.payment.get(x, x) for x in c["payment"]) or "-"
-        groups = "; ".join(
-            f"{g.rooms}-комн. — {g.count} шт., {num(g.area_min)}–{num(g.area_max)} м², "
-            f"{millions(g.price_min)}–{millions(g.price_max)} млн ₸"
-            for g in h.groups
-        )
-        lines.append(
-            f"[{n}] ЖК {c['name']} — {cat.classes.get(c['housing_class'], c['housing_class'])}, "
-            f"{c['district']} р-н, {c['city']}; {completion_text(c)}; инфраструктура: {infra}; покупка: {pay}"
-            f"\n    Свободные квартиры под запрос: {groups or 'нет'}"
-            f"\n    <description>{quote_description(c['description'])}</description>"
-        )
+    lines += [hit_line(n, h, cat) for n, h in enumerate(hits, 1)]
     return "\n".join(lines)
+
+
+def hit_line(n: int, h: ComplexHit, cat: CatalogConfig, units_label: str = "Свободные квартиры под запрос") -> str:
+    """Кандидат [n] для модели: поля ЖК, группы квартир и описание в изоляции (<description>)."""
+    c = h.complex
+    infra = ", ".join(cat.complex_features.get(x, x) for x in c["features"]) or "-"
+    pay = ", ".join(cat.payment.get(x, x) for x in c["payment"]) or "-"
+    groups = "; ".join(
+        f"{g.rooms}-комн. — {g.count} шт., {num(g.area_min)}–{num(g.area_max)} м², "
+        f"{millions(g.price_min)}–{millions(g.price_max)} млн ₸"
+        for g in h.groups
+    )
+    return (
+        f"[{n}] ЖК {c['name']} — {cat.classes.get(c['housing_class'], c['housing_class'])}, "
+        f"{c['district']} р-н, {c['city']}; {completion_text(c)}; инфраструктура: {infra}; покупка: {pay}"
+        f"\n    {units_label}: {groups or 'нет'}"
+        f"\n    <description>{quote_description(c['description'])}</description>"
+    )
 
 
 def quote_description(desc: str) -> str:
@@ -180,7 +185,7 @@ def _generate(
     # фолбэк виден как блок типа fallback в ответе и как смена модели в msg.model
     fallback = any(b.type == "fallback" for b in msg.content) or (msg.model or model) != model
     if msg.stop_reason == "refusal":
-        raw = "Не получилось подготовить ответ по этому запросу. Попробуйте переформулировать."
+        raw = REFUSAL_TEXT
     text, invalid, cited = resolve_refs(strip_contacts(raw, allowed), ids)
     return AnswerResult(
         model=model,

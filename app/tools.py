@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from app.config import AppConfig
 from app.schemas import SearchFilters
-from app.search.catalog import complex_where, unit_where
+from app.search.catalog import ComplexHit, complex_where, fetch_hits, unit_where
 
 
 class ToolError(ValueError):
@@ -119,3 +119,11 @@ def price_stats(
         stats.median_price_kzt, stats.median_kzt_per_m2 = round(med_price), round(med_m2)
         stats.p25_kzt_per_m2, stats.p75_kzt_per_m2 = round(p25), round(p75)
     return stats
+
+
+def get_listing(conn, source_id: str) -> ComplexHit:
+    """ЖК и все его свободные квартиры по числу комнат — актуально из базы. Свободных нет — пустые группы,
+    это нормальный ответ («а что со вторым?»), не ошибка."""
+    if conn.execute("SELECT 1 FROM complexes WHERE source_id = %s", (source_id,)).fetchone() is None:
+        raise ToolError(f"ЖК {source_id!r} нет в каталоге")
+    return fetch_hits(conn, [source_id], SearchFilters())[0]

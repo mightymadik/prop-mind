@@ -96,3 +96,44 @@ def test_price_stats_on_real_data():
         assert s.enough_data and s.p25_kzt_per_m2 <= s.median_kzt_per_m2 <= s.p75_kzt_per_m2
         empty = price_stats(conn, cfg, "Астана", district="Нура", rooms=9)
         assert empty.count == 0 and not empty.enough_data
+
+
+def test_get_listing_on_real_data():
+    from app.tools import get_listing
+
+    with _db_conn() as conn:
+        sid = conn.execute("SELECT source_id FROM complexes ORDER BY source_id LIMIT 1").fetchone()[0]
+        hit = get_listing(conn, sid)
+        assert hit.complex["source_id"] == sid
+        free = conn.execute("SELECT count(*) FROM units WHERE complex_id = %s AND status = 'free'", (sid,)).fetchone()
+        assert sum(g.count for g in hit.groups) == free[0]
+        with pytest.raises(ToolError, match="нет в каталоге"):
+            get_listing(conn, "cx-нет-такого")
+
+
+def test_get_listing_without_free_units_is_a_card_not_an_error():
+    from app.llm.answer import hit_line
+    from app.tools import get_listing
+
+    class Conn:
+        def execute(self, sql, params):
+            self.sql = sql
+            return self
+
+        def fetchone(self):
+            return (1,)
+
+        def __iter__(self):  # fetch_hits: ЖК есть, свободных квартир нет
+            if "FROM complexes" in self.sql:
+                return iter([("cx-1", "Алматы", "Медеуский", "Т", "Д", "business", 2027, 3, False, [], [], "Тихо.")])
+            return iter([])
+
+    hit = get_listing(Conn(), "cx-1")
+    assert hit.groups == []
+    assert "Свободные квартиры: нет" in hit_line(2, hit, cfg.catalog, "Свободные квартиры")
+
+
+def _db_conn():
+    from tests.test_catalog_search import _db
+
+    return _db()
