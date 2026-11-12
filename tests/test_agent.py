@@ -235,3 +235,10 @@ def test_echo_drops_blocks_before_mid_stream_fallback():
     content = [b("thinking", 1), b("text", 2), b("tool_use", 3), b("fallback", 4), b("thinking", 5), b("tool_use", 6)]
     assert [x.n for x in agent.echo_blocks(content)] == [2, 5, 6]
     assert [x.n for x in agent.echo_blocks(content[:3])] == [1, 2, 3]  # без фолбэка — всё как есть
+
+
+def test_tool_log_keeps_inputs_and_errors_for_evals(monkeypatch):
+    low = call("mortgage_payment", 0, program="mortgage", price_kzt=30_000_000, down_payment_kzt=1, years=10)
+    r, _, _ = run([([search(1, city="Алматы"), low], "tool_use"), ([text("ok")], "end_turn")], monkeypatch)
+    assert [(x["name"], x["error"]) for x in r.tool_log] == [("search_listings", False), ("mortgage_payment", True)]
+    assert r.tool_log[1]["input"]["down_payment_kzt"] == 1 and r.tool_log[0]["input"]["city"] == "Алматы"

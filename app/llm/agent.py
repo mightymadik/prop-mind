@@ -110,6 +110,8 @@ class AgentResult:
     invalid_refs: list[int] = field(default_factory=list)
     cited: list[str] = field(default_factory=list)
     tool_calls: list[str] = field(default_factory=list)  # имена, по порядку; без аргументов
+    tool_log: list[dict] = field(default_factory=list)  # {name, input, error} — только для evals, не в query_log
+    relaxed: list[str] = field(default_factory=list)  # что ослабляли поиски этого хода (объединение)
     first_filters: SearchFilters | None = None  # аргументы первого search_listings — для evals разбора
     refused: bool = False
     stop_reason: str | None = None
@@ -192,6 +194,7 @@ def run_agent(
             searches += 1
             emit("filters", {"filters": f})
             r = retrieve(conn, query, cfg, settings, filters=f, embed_fn=embed_fn, rerank_fn=rerank_fn)
+            res.relaxed += [x for x in r.relaxed if x not in res.relaxed]
             for stage, ms in r.timings_ms.items():
                 res.timings_ms[stage] = res.timings_ms.get(stage, 0) + ms
             lines = ["Ослаблено поиском: " + (", ".join(RELAX_TEXT.get(x, x) for x in r.relaxed) or "ничего")]
@@ -209,6 +212,11 @@ def run_agent(
         return json.dumps(asdict(price_stats(conn, cfg, **args.model_dump())), ensure_ascii=False)
 
     def tool_result(u) -> dict:
+        out = call_tool(u)
+        res.tool_log.append({"name": u.name, "input": u.input, "error": bool(out.get("is_error"))})
+        return out
+
+    def call_tool(u) -> dict:
         over = len(res.tool_calls) >= lim.max_tool_calls or (
             u.name == "search_listings" and searches >= lim.max_search_calls
         )
