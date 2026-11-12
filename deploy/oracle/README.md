@@ -40,6 +40,11 @@ git clone https://github.com/<you>/prop-mind.git && cd prop-mind/deploy/oracle
 cp .env.example .env && nano .env   # DOMAIN, POSTGRES_PASSWORD, ключи
 ```
 
+`HISTORY_SECRET` — случайная строка для подписи истории диалога агента (v2):
+`python3 -c "import secrets; print(secrets.token_hex(32))"`. Без неё `/agent` работает, но не
+принимает текст прошлых ответов — только запросы пользователя и id ЖК. Смена секрета обнуляет
+подписи у всех открытых диалогов: это безопасно, текст прошлых ответов просто перестанет учитываться.
+
 **Домен без покупки:** `DOMAIN=<публичный-IP-через-дефисы>.sslip.io` (например,
 `203-0-113-7.sslip.io`) — Caddy выпустит на него сертификат Let's Encrypt.
 
@@ -52,6 +57,8 @@ docker compose logs -f caddy   # дождись «certificate obtained»
 
 Схема базы создаётся при первом старте из `db/schema.sql`. Миграции при обновлении:
 `docker compose exec api python scripts/migrate.py`.
+После обновления с агентом (6.4) миграция обязательна: без колонки `query_log.mode` проверка дневного
+бюджета падает, и все запросы к моделям получают 503.
 
 ## 4. Данные
 
@@ -70,4 +77,5 @@ docker compose exec api python scripts/sync_catalog.py --config config/demo.yaml
 
 - Обновление: `git pull && docker compose up -d --build`.
 - Бэкап раз в сутки (cron): `docker compose exec -T db pg_dump -U prop -d prop | gzip > ~/backup-$(date +%F).sql.gz`.
-- Расход на модели ограничен `limits.daily_budget_usd` в конфиге.
+- Расход на модели ограничен `limits.daily_budget_usd` в конфиге; агенту (`/agent`) — не больше
+  `agent.daily_budget_usd` из него. Выключить агента без релиза: `agent.enabled: false`.
