@@ -9,6 +9,7 @@ from app.config import AppConfig
 BUDGET_SQL = """
 SELECT coalesce(sum(cost_usd), 0) FROM query_log
 WHERE created_at >= (date_trunc('day', now() AT TIME ZONE %(tz)s) AT TIME ZONE %(tz)s)
+  AND (%(mode)s::text IS NULL OR mode = %(mode)s)
 """
 
 
@@ -38,12 +39,17 @@ class RateLimiter:
             return 0.0
 
 
-def spent_today_usd(conn, cfg: AppConfig) -> float:
-    return float(conn.execute(BUDGET_SQL, {"tz": cfg.limits.timezone}).fetchone()[0])
+def spent_today_usd(conn, cfg: AppConfig, mode: str | None = None) -> float:
+    return float(conn.execute(BUDGET_SQL, {"tz": cfg.limits.timezone, "mode": mode}).fetchone()[0])
 
 
 def budget_left(conn, cfg: AppConfig) -> bool:
     return spent_today_usd(conn, cfg) < cfg.limits.daily_budget_usd
+
+
+def agent_budget_left(conn, cfg: AppConfig) -> bool:
+    """Агенту — своя доля дневного бюджета: он дороже v1 и не должен съесть весь бюджет демо."""
+    return spent_today_usd(conn, cfg, "v2") < cfg.agent.daily_budget_usd
 
 
 def frame_ancestors(cfg: AppConfig, site_key: str | None) -> str:

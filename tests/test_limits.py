@@ -1,7 +1,7 @@
 import pytest
 
 from app.config import load_config
-from app.limits import RateLimiter, budget_left, frame_ancestors, spent_today_usd
+from app.limits import RateLimiter, agent_budget_left, budget_left, frame_ancestors, spent_today_usd
 
 CFG = load_config("config/demo.yaml")
 
@@ -39,5 +39,11 @@ def test_budget_counts_today_only_in_configured_timezone():
         assert spent_today_usd(conn, CFG) == pytest.approx(before + 1.5)  # вчерашнее не считается
         tight = CFG.model_copy(update={"limits": CFG.limits.model_copy(update={"daily_budget_usd": before + 1})})
         assert not budget_left(conn, tight)
+        v2 = spent_today_usd(conn, CFG, "v2")
+        conn.execute("INSERT INTO query_log (query, cost_usd, mode) VALUES ('a', 0.4, 'v2')")
+        assert spent_today_usd(conn, CFG, "v2") == pytest.approx(v2 + 0.4)  # доля агента — только mode='v2'
+        agent_tight = CFG.model_copy(update={"agent": CFG.agent.model_copy(update={"daily_budget_usd": v2 + 0.3})})
+        roomy = CFG.model_copy(update={"agent": CFG.agent.model_copy(update={"daily_budget_usd": v2 + 1})})
+        assert not agent_budget_left(conn, agent_tight) and agent_budget_left(conn, roomy)
         conn.execute("ROLLBACK TO SAVEPOINT t")
         conn.rollback()

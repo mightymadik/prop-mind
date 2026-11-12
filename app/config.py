@@ -77,6 +77,8 @@ class MortgageProgram(BaseModel):
 
 
 class AgentConfig(BaseModel):
+    enabled: bool = False  # POST /agent; выключен — 404
+    daily_budget_usd: float = 1.0  # из общего дневного бюджета — не больше стольких на агента (mode='v2')
     price_stats_min_count: int = 5  # меньше квартир в выборке — «мало данных» вместо медианы
     max_tool_calls: int = 6  # вызовов инструментов за ход; после — tool_choice: none
     max_search_calls: int = 3  # из них search_listings

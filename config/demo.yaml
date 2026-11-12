@@ -114,6 +114,8 @@ mortgage:                        # калькулятор агента (6.4); к
     source: пример, не оферта
 
 agent:
+  enabled: true                  # POST /agent (v2); в UI — за переключателем, по умолчанию v1
+  daily_budget_usd: 1            # часть общего limits.daily_budget_usd, которую может потратить агент
   price_stats_min_count: 5       # меньше свободных квартир в выборке — «мало данных» вместо медианы
   max_tool_calls: 6              # вызовов инструментов за ход; дальше — tool_choice: none
   max_search_calls: 3            # из них search_listings

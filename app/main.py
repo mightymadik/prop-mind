@@ -12,10 +12,10 @@ from pydantic import BaseModel, Field
 
 from app.config import get_settings, load_config
 from app.db import connect
-from app.limits import RateLimiter, budget_left, frame_ancestors
+from app.limits import RateLimiter, agent_budget_left, budget_left, frame_ancestors
 from app.llm.parser import parse_query
-from app.schemas import SearchFilters
-from app.service import run_search
+from app.schemas import ChatTurn, SearchFilters
+from app.service import run_agent_search, run_search
 
 app = FastAPI(title="prop-mind")
 WEB = Path(__file__).resolve().parent.parent / "web"
@@ -61,8 +61,14 @@ class QueryIn(BaseModel):
     site_key: str | None = Field(None, max_length=64)
 
 
-def guard(request: Request, site_key: str | None) -> None:
-    """Перед вызовом моделей: site-key → лимит IP (в памяти) → дневной бюджет (по query_log)."""
+class AgentIn(QueryIn):
+    # агент видит последние agent.history_max_turns; 20 — страховка от огромных тел запроса
+    history: list[ChatTurn] = Field(default_factory=list, max_length=20)
+
+
+def guard(request: Request, site_key: str | None, agent: bool = False) -> None:
+    """Перед вызовом моделей: site-key → лимит IP (в памяти) → дневной бюджет (по query_log);
+    агенту — ещё и своя доля бюджета."""
     if site_key is not None and site_key not in cfg.sites:
         raise HTTPException(403, "unknown site key")
     ip = request.client.host if request.client else "unknown"  # за прокси — из X-Forwarded-For (uvicorn)
@@ -71,7 +77,7 @@ def guard(request: Request, site_key: str | None) -> None:
         raise HTTPException(429, "Слишком много запросов — подождите минуту.", {"Retry-After": str(math.ceil(wait))})
     try:
         with connect() as conn:
-            ok = budget_left(conn, cfg)
+            ok = budget_left(conn, cfg) and (not agent or agent_budget_left(conn, cfg))
     except Exception as e:  # noqa: BLE001 — без базы бюджет не проверить: не тратим ключи вслепую
         raise HTTPException(503, "service unavailable") from e
     if not ok:
@@ -95,6 +101,7 @@ def health() -> dict:
         "free_units": units,
         "anthropic_key": bool(s.anthropic_api_key),
         "voyage_key": bool(s.voyage_api_key),
+        "history_secret": bool(s.history_secret),  # без него агент не принимает текст прошлых ответов
     }
 
 
@@ -168,9 +175,27 @@ def search_endpoint(body: QueryIn, request: Request):
     (или clarification), done; при сбое — error. Номер [n] в delta — n-й объект из события results."""
     guard(request, body.site_key)  # до начала потока: отказ — обычный HTTP 403/429/503
     settings = get_settings()
+    return respond(request, lambda on_event=None: run_search(body.query, cfg, settings, on_event=on_event))
+
+
+@app.post("/agent")
+def agent_endpoint(body: AgentIn, request: Request):
+    """Агент (v2): {query, history} → ответ с инструментами. SSE: tool, filters, results, delta, answer
+    (с подписанной репликой turn для истории), done; при сбое — error. По умолчанию в UI — v1 (/search)."""
+    if not cfg.agent.enabled:
+        raise HTTPException(404, "agent is disabled")
+    guard(request, body.site_key, agent=True)
+    settings = get_settings()
+    return respond(
+        request, lambda on_event=None: run_agent_search(body.query, body.history, cfg, settings, on_event=on_event)
+    )
+
+
+def respond(request: Request, run):
+    """JSON или SSE (по Accept). run(on_event=None) → payload; сбой → 502 или событие error."""
     if "text/event-stream" not in request.headers.get("accept", ""):
         try:
-            return run_search(body.query, cfg, settings)
+            return run()
         except Exception as e:  # noqa: BLE001 — сбой модели или поиска → 502 без стектрейса
             raise HTTPException(502, f"search failed: {e.__class__.__name__}") from e
 
@@ -179,7 +204,7 @@ def search_endpoint(body: QueryIn, request: Request):
 
     def work() -> None:
         try:
-            run_search(body.query, cfg, settings, on_event=lambda name, data: events.put(sse(name, data)))
+            run(on_event=lambda name, data: events.put(sse(name, data)))
         except Exception as e:  # noqa: BLE001 — в стриме ошибка уходит событием
             events.put(sse("error", {"error": f"search failed: {e.__class__.__name__}"}))
         finally:
