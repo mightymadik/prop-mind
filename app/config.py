@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -63,6 +63,22 @@ class ModerationConfig(BaseModel):
     stuffing_min_ratio: float = 0.05  # …и доля повторов в описании не меньше этой
 
 
+class MortgageProgram(BaseModel):
+    """Условия программы для калькулятора; модель их не задаёт, только выбирает программу по ключу."""
+
+    label: str
+    rate_pct: float = Field(ge=0)  # годовая ставка, %; 0 — рассрочка (равные платежи)
+    min_down_pct: float = Field(ge=0, lt=100)  # минимальный взнос, % цены
+    max_years: int = Field(gt=0)
+    max_loan_kzt: int | None = None  # лимит суммы кредита; None — без лимита
+    as_of: str  # дата, на которую указаны условия
+    source: str  # откуда условия («пример, не оферта» — в демо)
+
+
+class AgentConfig(BaseModel):
+    price_stats_min_count: int = 5  # меньше квартир в выборке — «мало данных» вместо медианы
+
+
 class CatalogConfig(BaseModel):
     """Новостройки: ЖК → квартиры. Словари — ключ → как пишем в тексте (search_text, промпты, интерфейс)."""
 
@@ -95,6 +111,8 @@ class AppConfig(BaseModel):
     limits: LimitsConfig
     sites: dict[str, SiteConfig]
     moderation: ModerationConfig = ModerationConfig()
+    mortgage: dict[str, MortgageProgram] = {}  # программа → условия (калькулятор ипотеки агента)
+    agent: AgentConfig = AgentConfig()
 
 
 def load_config(path: str | Path) -> AppConfig:

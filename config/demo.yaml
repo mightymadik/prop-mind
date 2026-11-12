@@ -85,3 +85,32 @@ moderation:                      # защита от prompt injection в опи�
   allowed_contacts: []           # контакты, которые ответ может выводить; в демо — никаких, в проде — отдел продаж
   stuffing_min_repeats: 4        # набивка: одна основа слова ≥ 4 раз (у описаний ЖК максимум 3)…
   stuffing_min_ratio: 0.05       # …и повторов ≥ 5% слов — страховка для длинных текстов
+
+mortgage:                        # калькулятор агента (6.4); ключи = catalog.payment. ПРИМЕР, НЕ ОФЕРТА: иллюстративные условия
+  mortgage:
+    label: рыночная ипотека
+    rate_pct: 19.0
+    min_down_pct: 20
+    max_years: 25
+    max_loan_kzt: 150000000
+    as_of: "2026-11-12"
+    source: пример, не оферта
+  state_program:
+    label: государственная ипотечная программа
+    rate_pct: 7.0
+    min_down_pct: 20
+    max_years: 25
+    max_loan_kzt: 36000000
+    as_of: "2026-11-12"
+    source: пример, не оферта
+  installment:
+    label: рассрочка от застройщика
+    rate_pct: 0
+    min_down_pct: 30
+    max_years: 2
+    max_loan_kzt: null
+    as_of: "2026-11-12"
+    source: пример, не оферта
+
+agent:
+  price_stats_min_count: 5       # меньше свободных квартир в выборке — «мало данных» вместо медианы
