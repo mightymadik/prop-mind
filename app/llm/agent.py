@@ -14,14 +14,14 @@ import anthropic
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model
 
 from app.config import AppConfig, Settings
-from app.costs import record
+from app.costs import record_usage
 from app.history import signed_turn
 from app.llm.answer import FALLBACK_BETA, REFUSAL_TEXT, RELAX_TEXT, hit_line, resolve_refs
 from app.llm.client import load_prompt
-from app.llm.parser import render_prompt
+from app.llm.parser import parse_query
 from app.moderation import ContactFilter, strip_contacts
 from app.pipeline import retrieve
-from app.schemas import ChatTurn, SearchFilters, build_parser_schema
+from app.schemas import ChatTurn, SearchFilters
 from app.search.catalog import ComplexHit
 from app.tools import ToolError, get_listing, mortgage_payment, price_stats
 
@@ -34,7 +34,10 @@ LABELS = {  # событие tool: только метка, без аргуме�
     "price_stats": "смотрю цены…",
 }
 DESCRIPTIONS = {
-    "search_listings": "Поиск ЖК со свободными квартирами по фильтрам. Возвращает ЖК с номерами [n].",
+    "search_listings": (
+        "Поиск ЖК со свободными квартирами по запросу словами; фильтры из него извлекает парсер. "
+        "Возвращает ЖК с номерами [n] или вопрос, который нужно задать пользователю."
+    ),
     "get_listing": "Актуальная карточка ЖК по source_id и все его свободные квартиры.",
     "mortgage_payment": "Ежемесячный платёж по программе из справочника; ставку и ограничения берёт сам.",
     "price_stats": "Медианная цена и цена за м² по свободным квартирам каталога (не рынка).",
@@ -47,18 +50,19 @@ def _lit(values) -> Any:
 
 
 def tool_models(cfg: AppConfig) -> dict[str, type[BaseModel]]:
-    """Схемы входа инструментов: словари — Literal из конфига, все поля обязательны (strict): с
-    необязательными полями модель молча теряет условия (разбор dev 95% → 65%, decisions.md)."""
+    """Схемы входа инструментов: словари — Literal из конфига, все поля обязательны (strict).
+    Поиск принимает запрос словами, фильтры делает парсер v1: вызов с 22 полями фильтров стоил
+    ~600 выходных токенов и ~4,6 с (decisions.md)."""
     forbid = ConfigDict(extra="forbid")
-    parser = build_parser_schema(cfg)
-    search = {
-        n: (f.annotation, Field(..., description=f.description))
-        for n, f in parser.model_fields.items()
-        if n != "needs_clarification"  # уточнение агент задаёт сам, без инструмента
-    }
+    query = Field(
+        ...,
+        max_length=500,
+        description="Запрос словами. Первый поиск без истории — сообщение пользователя дословно; "
+        "уточнение по истории — полный самостоятельный запрос со всеми условиями из прошлых реплик.",
+    )
     districts = dict.fromkeys(d for ds in cfg.districts.values() for d in ds)
     return {
-        "search_listings": create_model("search_listings", __config__=forbid, **search),
+        "search_listings": create_model("search_listings", __config__=forbid, query=(str, query)),
         "get_listing": create_model("get_listing", __config__=forbid, source_id=(str, ...)),
         "mortgage_payment": create_model(
             "mortgage_payment",
@@ -128,8 +132,12 @@ class AgentResult:
 
     @property
     def clarified(self) -> bool:
-        """Ответил без инструментов — уточнение (для evals: отдельный исход, не ноль)."""
-        return not self.tool_calls and not self.refused
+        """Уточнение вместо выдачи (для evals — отдельный исход, не ноль): ответ без инструментов
+        или разбор поиска попросил уточнить, и ЖК не показаны."""
+        if self.refused:
+            return False
+        asked = self.first_filters is not None and self.first_filters.needs_clarification is not None
+        return not self.tool_calls or (asked and not self.source_ids)
 
     def assistant_turn(self, secret: str, now: float | None = None) -> ChatTurn | None:
         """Подписанная реплика для истории клиента; отказ в историю как ответ не идёт."""
@@ -166,12 +174,16 @@ def run_agent(
     client = client or anthropic.Anthropic(api_key=settings.anthropic_api_key or None)
     emit = on_event or (lambda name, data: None)
     models = tool_models(cfg)
+    cache = {"type": "ephemeral"}
     base = dict(
         model=model,
         max_tokens=cfg.answer.max_tokens,
-        system=load_prompt(PROMPT_FILE) + render_prompt(cfg),
+        # кэш: метка на системном промпте — общий префикс (инструменты + промпт) для всех запросов;
+        # верхнеуровневая — вся история хода для следующего вызова модели
+        system=[{"type": "text", "text": load_prompt(PROMPT_FILE), "cache_control": cache}],
         thinking=mcfg.thinking,
         tools=tool_defs(models),
+        cache_control=cache,
     )
     messages: list[dict] = [{"role": "user", "content": f"{history}\n\nЗапрос: {query}" if history else query}]
     reg, res = Registry(), AgentResult(model=model, text="", raw_text="")
@@ -191,11 +203,18 @@ def run_agent(
         nonlocal searches
         args = models[u.name].model_validate(u.input)
         if u.name == "search_listings":
-            f = SearchFilters(**args.model_dump())
-            res.first_filters = res.first_filters or f
             searches += 1
+            t = time.perf_counter()
+            try:
+                f = parse_query(args.query, cfg, settings)
+            except (ValidationError, RuntimeError) as e:  # парсер уже повторил один раз
+                raise ToolError("не удалось разобрать запрос — переформулируй его") from e
+            res.timings_ms["parse"] = res.timings_ms.get("parse", 0) + int((time.perf_counter() - t) * 1000)
+            res.first_filters = res.first_filters or f
+            if f.needs_clarification:
+                return f"Поиск не выполнен — задай пользователю вопрос: {f.needs_clarification}"
             emit("filters", {"filters": f})
-            r = retrieve(conn, query, cfg, settings, filters=f, embed_fn=embed_fn, rerank_fn=rerank_fn)
+            r = retrieve(conn, args.query, cfg, settings, filters=f, embed_fn=embed_fn, rerank_fn=rerank_fn)
             res.relaxed += [x for x in r.relaxed if x not in res.relaxed]
             for stage, ms in r.timings_ms.items():
                 res.timings_ms[stage] = res.timings_ms.get(stage, 0) + ms
@@ -243,9 +262,11 @@ def run_agent(
             ctx = client.beta.messages.stream(**kwargs, fallbacks=mcfg.fallbacks, betas=[FALLBACK_BETA])
         else:
             ctx = client.messages.stream(**kwargs)
-        t_call = time.perf_counter()
+        t_call, first_text = time.perf_counter(), None
         with ctx as stream:
             for chunk in stream.text_stream:
+                if first_text is None and chunk:
+                    first_text = time.perf_counter()
                 if final:
                     say(chunk)
             msg = stream.get_final_message()
@@ -254,10 +275,17 @@ def run_agent(
         res.timings_ms[f"llm{res.rounds}"] = ms
         u = msg.usage
         res.llm_calls.append(
-            {"ms": ms, "input_tokens": u.input_tokens, "output_tokens": u.output_tokens, "stop_reason": msg.stop_reason}
+            {
+                "ms": ms,
+                "input_tokens": u.input_tokens,
+                "output_tokens": u.output_tokens,
+                "cache_write": u.cache_creation_input_tokens or 0,
+                "cache_read": u.cache_read_input_tokens or 0,
+                "stop_reason": msg.stop_reason,
+            }
         )
         served = msg.model if msg.model in cfg.pricing else model
-        record(served, msg.usage.input_tokens, msg.usage.output_tokens)
+        record_usage(served, u)
         res.input_tokens += msg.usage.input_tokens
         res.output_tokens += msg.usage.output_tokens
         res.served_model, res.stop_reason = msg.model, msg.stop_reason
@@ -272,6 +300,8 @@ def run_agent(
         uses = [b for b in blocks if b.type == "tool_use"]
         if msg.stop_reason != "tool_use" or not uses:
             raw = "".join(b.text for b in blocks if b.type == "text")
+            if first_text is not None:  # сколько ждал бы пользователь первых слов, если стримить финальный ответ
+                res.timings_ms["first_token"] = int((first_text - t0) * 1000)
             if not final:
                 say(raw)
             break

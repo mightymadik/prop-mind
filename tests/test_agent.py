@@ -29,11 +29,15 @@ def call(name: str, i: int = 0, **inp) -> dict:
     return {"type": "tool_use", "id": f"tu_{name}_{i}", "name": name, "input": inp}
 
 
-def search(i: int = 0, **over) -> dict:
-    f = agent.tool_models(CFG)["search_listings"]
-    fields = {n: ([] if "list" in str(x.annotation) else None) for n, x in f.model_fields.items()}
-    bools = {"delivered_only", "not_first_floor", "not_last_floor"}
-    return call("search_listings", i, **(fields | dict.fromkeys(bools, False) | {"semantic_query": ""} | over))
+PARSED = {  # что вернёт парсер на query (подменён в run)
+    "двушка в Алматы": SearchFilters(city="Алматы", rooms=[2]),
+    "двушка в Астане": SearchFilters(city="Астана", rooms=[2]),
+    "хочу квартиру": SearchFilters(needs_clarification="В каком городе ищете?"),
+}
+
+
+def search(i: int = 0, q: str = "двушка в Алматы") -> dict:
+    return call("search_listings", i, query=q)
 
 
 def _sse(blocks: list[dict], stop: str, model: str) -> bytes:
@@ -95,7 +99,7 @@ def scripted(script: list[tuple[list[dict], str]], sent: list) -> anthropic.Anth
     )
 
 
-def run(script, monkeypatch, hits_by_call=None, history="", cfg=CFG):
+def run(script, monkeypatch, hits_by_call=None, history="", cfg=CFG, parse=None):
     sent, events = [], []
     calls = iter(hits_by_call or [[hit("cx-1"), hit("cx-2")]])
 
@@ -104,6 +108,7 @@ def run(script, monkeypatch, hits_by_call=None, history="", cfg=CFG):
 
     monkeypatch.setattr(agent, "retrieve", fake_retrieve)
     monkeypatch.setattr(agent, "get_listing", lambda conn, sid: hit(sid, INJECTED))
+    monkeypatch.setattr(agent, "parse_query", parse or (lambda q, cfg, s: PARSED.get(q, SearchFilters())))
     r = agent.run_agent(
         None,
         "двушка в Алматы",
@@ -123,14 +128,14 @@ def tool_results(body: dict) -> list[dict]:
 def test_search_then_answer_maps_refs_and_streams_only_final(monkeypatch):
     r, sent, events = run(
         [
-            ([text("Сейчас поищу в Есильском до 30 млн."), search(city="Алматы", rooms=[2])], "tool_use"),
+            ([text("Сейчас поищу в Есильском до 30 млн."), search()], "tool_use"),
             ([text("Подходит [2], ещё [9].")], "end_turn"),
         ],
         monkeypatch,
     )
     assert r.text == "Подходит [cx-2], ещё ." and r.invalid_refs == [9] and r.cited == ["cx-2"]
     assert r.source_ids == ["cx-1", "cx-2"] and r.tool_calls == ["search_listings"] and r.rounds == 2
-    assert set(r.timings_ms) == {"llm1", "llm2", "answer"} and "ttft" not in r.timings_ms
+    assert set(r.timings_ms) == {"parse", "llm1", "llm2", "first_token", "answer"}
     assert [c["output_tokens"] for c in r.llm_calls] == [20, 20] and r.llm_calls[0]["stop_reason"] == "tool_use"
     assert r.first_filters == SearchFilters(city="Алматы", rooms=[2])
     deltas = "".join(d["text"] for n, d in events if n == "delta")
@@ -145,8 +150,8 @@ def test_search_then_answer_maps_refs_and_streams_only_final(monkeypatch):
 def test_numbering_is_shared_across_searches(monkeypatch):
     r, sent, _ = run(
         [
-            ([search(0, city="Алматы")], "tool_use"),
-            ([search(1, city="Астана")], "tool_use"),
+            ([search(0)], "tool_use"),
+            ([search(1, q="двушка в Астане")], "tool_use"),
             ([text("[1] и [3]")], "end_turn"),
         ],
         monkeypatch,
@@ -241,6 +246,34 @@ def test_echo_drops_blocks_before_mid_stream_fallback():
 
 def test_tool_log_keeps_inputs_and_errors_for_evals(monkeypatch):
     low = call("mortgage_payment", 0, program="mortgage", price_kzt=30_000_000, down_payment_kzt=1, years=10)
-    r, _, _ = run([([search(1, city="Алматы"), low], "tool_use"), ([text("ok")], "end_turn")], monkeypatch)
+    r, _, _ = run([([search(1), low], "tool_use"), ([text("ok")], "end_turn")], monkeypatch)
     assert [(x["name"], x["error"]) for x in r.tool_log] == [("search_listings", False), ("mortgage_payment", True)]
-    assert r.tool_log[1]["input"]["down_payment_kzt"] == 1 and r.tool_log[0]["input"]["city"] == "Алматы"
+    assert r.tool_log[1]["input"]["down_payment_kzt"] == 1 and r.tool_log[0]["input"]["query"] == "двушка в Алматы"
+
+
+def test_parser_clarification_is_returned_to_the_model(monkeypatch):
+    r, sent, events = run(
+        [([search(0, q="хочу квартиру")], "tool_use"), ([text("В каком городе ищете?")], "end_turn")], monkeypatch
+    )
+    assert tool_results(sent[1])[0]["content"] == "Поиск не выполнен — задай пользователю вопрос: В каком городе ищете?"
+    assert r.clarified and r.first_filters.needs_clarification and r.source_ids == []
+    assert "filters" not in [n for n, _ in events] and "results" not in [n for n, _ in events]
+
+
+def test_parser_failure_is_a_tool_error(monkeypatch):
+    def boom(q, cfg, s):
+        raise RuntimeError("no structured output")
+
+    _, sent, _ = run([([search(0)], "tool_use"), ([text("Повторю.")], "end_turn")], monkeypatch, parse=boom)
+    res = tool_results(sent[1])[0]
+    assert res["is_error"] and "не удалось разобрать запрос" in res["content"]
+
+
+def test_prompt_cache_markers_and_first_token_timing(monkeypatch):
+    r, sent, _ = run([([search()], "tool_use"), ([text("Подходит [1].")], "end_turn")], monkeypatch)
+    body = sent[0]
+    assert body["system"][0]["cache_control"] == {"type": "ephemeral"} and body["cache_control"] == {
+        "type": "ephemeral"
+    }
+    assert body["tools"][0]["input_schema"]["required"] == ["query"]
+    assert 0 <= r.timings_ms["first_token"] <= r.timings_ms["answer"]
