@@ -6,6 +6,7 @@ answer         — ответ на зафиксированной выдаче: 
 
     uv run python evals/run_evals.py --repeats 3                                   # parse, dev
     uv run python evals/run_evals.py --split holdout --repeats 3                   # один раз, в конце
+    uv run python evals/run_evals.py --agent                                       # разбор агентом (v2)
     uv run python evals/run_evals.py --layer search --parsed-from <отчёт parse>
     uv run python evals/run_evals.py --layer answer --cases split:dev --models claude-sonnet-5-5 --judge \
         --parsed-from <отчёт parse>
@@ -25,11 +26,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from string import Template
 from typing import Any
+from unittest.mock import patch
 
 from pydantic import BaseModel
 
 from app.config import get_settings, load_config
+from app.costs import track
 from app.db import connect
+from app.llm import agent
 from app.llm.answer import RELAX_TEXT, cost_usd, generate_answer
 from app.llm.client import PROMPTS_DIR, call_structured, load_prompt
 from app.llm.parser import PROMPT_FILE, parse_query
@@ -125,6 +129,46 @@ def run_case(case: dict, cfg, settings) -> dict:
         "error": error,
         "latency_ms": latency,
         # относительно SearchFilters: у схемы для LLM дефолтов нет, exclude_defaults не сработал бы
+        "got": {k: v for k, v in got.model_dump().items() if _norm(v) != _norm(defaults[k])} if got else None,
+    }
+
+
+class FirstSearch(Exception):
+    """Агент вызвал search_listings: фильтры получены, дальше ход не нужен."""
+
+    def __init__(self, filters: SearchFilters):
+        self.filters = filters
+
+
+def _stop_at_search(conn, query, cfg, settings, filters, embed_fn=None, rerank_fn=None):
+    raise FirstSearch(filters)
+
+
+def run_agent_case(case: dict, cfg, settings) -> dict:
+    """Разбор агентом: аргументы первого search_listings; ответ без инструментов — уточнение.
+    Время и токены — до первого поиска (обычно один вызов модели)."""
+    t = time.perf_counter()
+    error = None
+    with track() as ledger:
+        try:
+            res = agent.run_agent(None, case["query"], "", cfg, settings)
+            if res.tool_calls:  # первым вызван не поиск — разбора нет
+                got, error = None, f"no search: {res.tool_calls}"
+            else:
+                got = SearchFilters(needs_clarification=res.text or "?")
+        except FirstSearch as stop:
+            got = stop.filters
+        except Exception as e:  # noqa: BLE001
+            got, error = None, f"{e.__class__.__name__}: {e}"
+    latency = int((time.perf_counter() - t) * 1000)
+    checks = compare_filters(got, case) if got else {"error": False}
+    defaults = SearchFilters().model_dump()
+    return {
+        "ok": all(checks.values()),
+        "checks": checks,
+        "error": error,
+        "latency_ms": latency,
+        "output_tokens": sum(o for _, o in ledger.tokens.values()),
         "got": {k: v for k, v in got.model_dump().items() if _norm(v) != _norm(defaults[k])} if got else None,
     }
 
@@ -541,6 +585,7 @@ def main() -> None:
     ap.add_argument("--split", default="dev", choices=["dev", "holdout"])
     ap.add_argument("--repeats", type=int, default=1, help="parse: прогонов на кейс, оценка разброса")
     ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--agent", action="store_true", help="parse: фильтры от агента (первый search_listings)")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
@@ -655,8 +700,9 @@ def run_parse(args, cfg, settings) -> None:
     cases = load_cases(args.split)
 
     jobs = [c for c in cases for _ in range(args.repeats)]
-    with ThreadPoolExecutor(args.workers) as pool:
-        runs = list(pool.map(lambda c: run_case(c, cfg, settings), jobs))
+    runner = run_agent_case if args.agent else run_case
+    with ThreadPoolExecutor(args.workers) as pool, patch.object(agent, "retrieve", _stop_at_search):
+        runs = list(pool.map(lambda c: runner(c, cfg, settings), jobs))
     results = []
     for i, c in enumerate(cases):
         rs = runs[i * args.repeats : (i + 1) * args.repeats]
@@ -681,13 +727,16 @@ def run_parse(args, cfg, settings) -> None:
         "split": args.split,
         "date": now.isoformat(timespec="seconds"),
         "config": args.config,
-        "model": cfg.models["parser"],
+        "model": cfg.models["agent"] if args.agent else cfg.models["parser"],
         "prompt": prompt_file,
         "prompt_sha": hashlib.sha256(prompt).hexdigest()[:12],
         "summary": summary,
         "results": results,
     }
-    kind = "parse"
+    kind = "agent-parse" if args.agent else "parse"
+    if args.agent:
+        out_tok = sorted(r["output_tokens"] for c in results for r in c["runs"])
+        summary["output_tokens"] = {"p50": out_tok[len(out_tok) // 2], "max": out_tok[-1]}
     out = ROOT / "results" / f"{now:%Y%m%dT%H%M%SZ}_{kind}_{args.split}_x{args.repeats}.json"
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -709,6 +758,8 @@ def run_parse(args, cfg, settings) -> None:
                 f"  FAIL {r['id']} {r['success_rate']:.0%} ok, fields {bad} {bad_runs[0]['error'] or ''}"
                 f"\n       expected {r['expected']}\n       got      {bad_runs[0]['got']}"
             )
+    if args.agent:
+        print(f"  output tokens p50 {summary['output_tokens']['p50']}, max {summary['output_tokens']['max']}")
     print(f"report: {out.relative_to(ROOT.parent)}")
 
 

@@ -1,0 +1,2131 @@
+{
+  "layer": "parse",
+  "split": "dev",
+  "date": "2026-11-12T11:20:41+00:00",
+  "config": "config/demo.yaml",
+  "model": "claude-sonnet-5-5",
+  "sparse_search_args": true,
+  "prompt": "parse_query.md",
+  "prompt_sha": "44446c37adb6",
+  "summary": {
+    "cases": 37,
+    "repeats": 1,
+    "fully_correct": {
+      "mean": 0.649,
+      "stdev": 0.0,
+      "min": 0.649,
+      "max": 0.649,
+      "per_repeat": [
+        0.649
+      ]
+    },
+    "flaky": [],
+    "errors": 0,
+    "by_field": {
+      "city": 0.97,
+      "districts": 1.0,
+      "classes": 0.909,
+      "completion_max_year": 0.939,
+      "completion_max_quarter": 0.939,
+      "delivered_only": 1.0,
+      "features": 0.939,
+      "payment": 0.909,
+      "rooms": 1.0,
+      "price_min_kzt": 1.0,
+      "price_max_kzt": 0.909,
+      "area_min_m2": 1.0,
+      "area_max_m2": 1.0,
+      "floor_min": 0.939,
+      "floor_max": 1.0,
+      "not_first_floor": 1.0,
+      "not_last_floor": 1.0,
+      "finishing": 1.0,
+      "windows": 1.0,
+      "views": 0.939,
+      "orientations": 0.97,
+      "needs_clarification": 0.946,
+      "semantic_query": 0.969
+    },
+    "by_tag": {
+      "area": {
+        "n": 1,
+        "success_rate": 0.0
+      },
+      "clarify": {
+        "n": 4,
+        "success_rate": 1.0
+      },
+      "class": {
+        "n": 5,
+        "success_rate": 0.4
+      },
+      "completion": {
+        "n": 3,
+        "success_rate": 0.333
+      },
+      "features": {
+        "n": 4,
+        "success_rate": 0.25
+      },
+      "finishing": {
+        "n": 3,
+        "success_rate": 0.333
+      },
+      "floor": {
+        "n": 4,
+        "success_rate": 0.25
+      },
+      "metro": {
+        "n": 1,
+        "success_rate": 1.0
+      },
+      "orientation": {
+        "n": 1,
+        "success_rate": 0.0
+      },
+      "payment": {
+        "n": 3,
+        "success_rate": 0.0
+      },
+      "price": {
+        "n": 1,
+        "success_rate": 1.0
+      },
+      "rent": {
+        "n": 1,
+        "success_rate": 1.0
+      },
+      "semantic": {
+        "n": 15,
+        "success_rate": 0.933
+      },
+      "simple": {
+        "n": 3,
+        "success_rate": 0.667
+      },
+      "slang": {
+        "n": 4,
+        "success_rate": 0.25
+      },
+      "view": {
+        "n": 4,
+        "success_rate": 0.25
+      },
+      "windows": {
+        "n": 2,
+        "success_rate": 0.5
+      }
+    },
+    "latency_ms": {
+      "p50": 2609,
+      "p95": 7931
+    },
+    "output_tokens": {
+      "p50": 156,
+      "max": 1024
+    }
+  },
+  "results": [
+    {
+      "id": "n01",
+      "query": "двушка в Астане до 45 млн",
+      "tags": [
+        "simple"
+      ],
+      "expected": {
+        "city": "Астана",
+        "rooms": [
+          2
+        ],
+        "price_max_kzt": 45000000
+      },
+      "semantic": "empty",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": true,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 3083,
+          "output_tokens": 131,
+          "got": {
+            "city": "Астана",
+            "rooms": [
+              2
+            ],
+            "price_max_kzt": 45000000
+          }
+        }
+      ]
+    },
+    {
+      "id": "n02",
+      "query": "трёхкомнатная в Бостандыкском районе бизнес-класса",
+      "tags": [
+        "simple",
+        "class"
+      ],
+      "expected": {
+        "city": "Алматы",
+        "districts": [
+          "Бостандыкский"
+        ],
+        "rooms": [
+          3
+        ],
+        "classes": [
+          "business"
+        ]
+      },
+      "semantic": "empty",
+      "success_rate": 0.0,
+      "runs": [
+        {
+          "ok": false,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": false,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": true,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 4840,
+          "output_tokens": 430,
+          "got": {
+            "city": "Алматы",
+            "districts": [
+              "Бостандыкский"
+            ],
+            "rooms": [
+              3
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "n03",
+      "query": "однушка в Алматы от 25 до 35 млн, не первый этаж",
+      "tags": [
+        "simple",
+        "floor"
+      ],
+      "expected": {
+        "city": "Алматы",
+        "rooms": [
+          1
+        ],
+        "price_min_kzt": 25000000,
+        "price_max_kzt": 35000000,
+        "not_first_floor": true
+      },
+      "semantic": "empty",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": true,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 3272,
+          "output_tokens": 173,
+          "got": {
+            "city": "Алматы",
+            "rooms": [
+              1
+            ],
+            "price_min_kzt": 25000000,
+            "price_max_kzt": 35000000,
+            "not_first_floor": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "n04",
+      "query": "квартира в сданном доме в Есильском районе",
+      "tags": [
+        "completion"
+      ],
+      "expected": {
+        "city": "Астана",
+        "districts": [
+          "Есильский"
+        ],
+        "delivered_only": true
+      },
+      "semantic": "empty",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": true,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 3271,
+          "output_tokens": 128,
+          "got": {
+            "city": "Астана",
+            "districts": [
+              "Есильский"
+            ],
+            "delivered_only": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "n05",
+      "query": "новостройка с отделкой под ключ в Алматы, сдача не позже 2027 года",
+      "tags": [
+        "completion",
+        "finishing"
+      ],
+      "expected": {
+        "city": "Алматы",
+        "finishing": [
+          "finished"
+        ],
+        "completion_max_year": 2027
+      },
+      "semantic": "empty",
+      "success_rate": 0.0,
+      "runs": [
+        {
+          "ok": false,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": false,
+            "completion_max_quarter": false,
+            "delivered_only": true,
+            "features": true,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 4903,
+          "output_tokens": 243,
+          "got": {
+            "city": "Алматы",
+            "finishing": [
+              "finished"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "n06",
+      "query": "евродвушка в рассрочку от застройщика, Астана",
+      "tags": [
+        "slang",
+        "payment"
+      ],
+      "expected": {
+        "city": "Астана",
+        "rooms": [
+          2
+        ],
+        "payment": [
+          "installment"
+        ]
+      },
+      "semantic": "empty",
+      "success_rate": 0.0,
+      "runs": [
+        {
+          "ok": false,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": true,
+            "payment": false,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 6142,
+          "output_tokens": 415,
+          "got": {
+            "city": "Астана",
+            "rooms": [
+              2
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "n07",
+      "query": "трешка с видом на горы, не дороже 60 млн",
+      "tags": [
+        "view",
+        "slang"
+      ],
+      "expected": {
+        "city": "Алматы",
+        "rooms": [
+          3
+        ],
+        "views": [
+          "mountains"
+        ],
+        "price_max_kzt": 60000000
+      },
+      "semantic": "empty",
+      "success_rate": 0.0,
+      "runs": [
+        {
+          "ok": false,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": true,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": false,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 4102,
+          "output_tokens": 285,
+          "got": {
+            "city": "Алматы",
+            "rooms": [
+              3
+            ],
+            "views": [
+              "mountains"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "n08",
+      "query": "квартира с окнами на Есиль, Левый берег",
+      "tags": [
+        "view",
+        "slang"
+      ],
+      "expected": {
+        "city": "Астана",
+        "districts": [
+          "Есильский"
+        ],
+        "views": [
+          "river"
+        ]
+      },
+      "semantic": "empty",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": true,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1990,
+          "output_tokens": 137,
+          "got": {
+            "city": "Астана",
+            "districts": [
+              "Есильский"
+            ],
+            "views": [
+              "river"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "n09",
+      "query": "2-комнатная, окна во двор, этаж не ниже пятого, Алматы",
+      "tags": [
+        "windows",
+        "floor"
+      ],
+      "expected": {
+        "city": "Алматы",
+        "rooms": [
+          2
+        ],
+        "windows": [
+          "yard"
+        ],
+        "floor_min": 5
+      },
+      "semantic": "empty",
+      "success_rate": 0.0,
+      "runs": [
+        {
+          "ok": false,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": true,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": false,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 3254,
+          "output_tokens": 266,
+          "got": {
+            "city": "Алматы",
+            "rooms": [
+              2
+            ],
+            "windows": [
+              "yard"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "n10",
+      "query": "квартира на солнечной стороне до 30 млн в Астане по госпрограмме",
+      "tags": [
+        "orientation",
+        "payment"
+      ],
+      "expected": {
+        "city": "Астана",
+        "orientations": [
+          "south"
+        ],
+        "price_max_kzt": 30000000,
+        "payment": [
+          "state_program"
+        ]
+      },
+      "semantic": "empty",
+      "success_rate": 0.0,
+      "runs": [
+        {
+          "ok": false,
+          "checks": {
+            "city": false,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": true,
+            "payment": false,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": false,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": false,
+            "needs_clarification": false,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 8380,
+          "output_tokens": 1024,
+          "got": {
+            "needs_clarification": "Запрос понятен, ищу."
+          }
+        }
+      ]
+    },
+    {
+      "id": "n11",
+      "query": "сквозная трёшка с окнами на две стороны, Нура",
+      "tags": [
+        "windows"
+      ],
+      "expected": {
+        "city": "Астана",
+        "districts": [
+          "Нура"
+        ],
+        "rooms": [
+          3
+        ],
+        "windows": [
+          "both"
+        ]
+      },
+      "semantic": "empty",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": true,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1993,
+          "output_tokens": 152,
+          "got": {
+            "city": "Астана",
+            "districts": [
+              "Нура"
+            ],
+            "rooms": [
+              3
+            ],
+            "windows": [
+              "both"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "n12",
+      "query": "студия в черновой отделке до 20 млн в Алматы",
+      "tags": [
+        "finishing"
+      ],
+      "expected": {
+        "city": "Алматы",
+        "rooms": [
+          1
+        ],
+        "finishing": [
+          "rough"
+        ],
+        "price_max_kzt": 20000000
+      },
+      "semantic": "empty",
+      "success_rate": 0.0,
+      "runs": [
+        {
+          "ok": false,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": true,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": false,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 2924,
+          "output_tokens": 282,
+          "got": {
+            "city": "Алматы",
+            "rooms": [
+              1
+            ],
+            "finishing": [
+              "rough"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "n13",
+      "query": "четырёхкомнатная от 100 квадратов в ЖК с подземным паркингом и закрытым двором",
+      "tags": [
+        "features",
+        "area"
+      ],
+      "expected": {
+        "rooms": [
+          4
+        ],
+        "area_min_m2": 100,
+        "features": [
+          "parking",
+          "closed_yard"
+        ]
+      },
+      "semantic": "empty",
+      "success_rate": 0.0,
+      "runs": [
+        {
+          "ok": false,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": false,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 3919,
+          "output_tokens": 423,
+          "got": {
+            "rooms": [
+              4
+            ],
+            "area_min_m2": 100.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "n14",
+      "query": "квартира рядом с метро в Алматы, не последний этаж, ипотека",
+      "tags": [
+        "features",
+        "floor",
+        "payment"
+      ],
+      "expected": {
+        "city": "Алматы",
+        "features": [
+          "near_metro"
+        ],
+        "not_last_floor": true,
+        "payment": [
+          "mortgage"
+        ]
+      },
+      "semantic": "empty",
+      "success_rate": 0.0,
+      "runs": [
+        {
+          "ok": false,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": true,
+            "payment": false,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 2794,
+          "output_tokens": 270,
+          "got": {
+            "city": "Алматы",
+            "features": [
+              "near_metro"
+            ],
+            "not_last_floor": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "n15",
+      "query": "двушка комфорт-класса в Ауэзовском, сдача в 2028 году",
+      "tags": [
+        "class",
+        "completion"
+      ],
+      "expected": {
+        "city": "Алматы",
+        "districts": [
+          "Ауэзовский"
+        ],
+        "rooms": [
+          2
+        ],
+        "classes": [
+          "comfort"
+        ],
+        "completion_max_year": 2028
+      },
+      "semantic": "empty",
+      "success_rate": 0.0,
+      "runs": [
+        {
+          "ok": false,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": false,
+            "completion_max_year": false,
+            "completion_max_quarter": false,
+            "delivered_only": true,
+            "features": true,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 4037,
+          "output_tokens": 430,
+          "got": {
+            "city": "Алматы",
+            "districts": [
+              "Ауэзовский"
+            ],
+            "rooms": [
+              2
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "n16",
+      "query": "тихий ЖК для семьи с детьми, рядом школа и садик, Астана",
+      "tags": [
+        "semantic",
+        "features"
+      ],
+      "expected": {
+        "city": "Астана",
+        "features": [
+          "near_school",
+          "kindergarten"
+        ]
+      },
+      "semantic": "required",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": true,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 2548,
+          "output_tokens": 146,
+          "got": {
+            "city": "Астана",
+            "features": [
+              "near_school",
+              "kindergarten"
+            ],
+            "semantic_query": "тихий ЖК для семьи с детьми"
+          }
+        }
+      ]
+    },
+    {
+      "id": "n17",
+      "query": "двушка в Алматы в зелёном месте, где можно гулять с собакой",
+      "tags": [
+        "semantic"
+      ],
+      "expected": {
+        "city": "Алматы",
+        "rooms": [
+          2
+        ]
+      },
+      "semantic": "required",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": true,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 2028,
+          "output_tokens": 167,
+          "got": {
+            "city": "Алматы",
+            "rooms": [
+              2
+            ],
+            "semantic_query": "зелёное место, рядом парк, можно гулять с собакой"
+          }
+        }
+      ]
+    },
+    {
+      "id": "n18",
+      "query": "современная архитектура, рядом бизнес-центры, бизнес-класс в Астане",
+      "tags": [
+        "semantic",
+        "class"
+      ],
+      "expected": {
+        "city": "Астана",
+        "classes": [
+          "business"
+        ]
+      },
+      "semantic": "required",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": true,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1998,
+          "output_tokens": 150,
+          "got": {
+            "city": "Астана",
+            "classes": [
+              "business"
+            ],
+            "semantic_query": "современная архитектура, рядом бизнес-центры"
+          }
+        }
+      ]
+    },
+    {
+      "id": "n19",
+      "query": "квартира для молодой пары, рядом кафе и спортзал, до 35 млн, Алматы",
+      "tags": [
+        "semantic"
+      ],
+      "expected": {
+        "city": "Алматы",
+        "price_max_kzt": 35000000
+      },
+      "semantic": "required",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": true,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 2529,
+          "output_tokens": 139,
+          "got": {
+            "city": "Алматы",
+            "price_max_kzt": 35000000,
+            "semantic_query": "для молодой пары, рядом кафе и спортзал"
+          }
+        }
+      ]
+    },
+    {
+      "id": "n20",
+      "query": "трёшка с видом на парк, двор без машин, Медеуский",
+      "tags": [
+        "view",
+        "features"
+      ],
+      "expected": {
+        "city": "Алматы",
+        "districts": [
+          "Медеуский"
+        ],
+        "rooms": [
+          3
+        ],
+        "views": [
+          "park"
+        ],
+        "features": [
+          "closed_yard"
+        ]
+      },
+      "semantic": "empty",
+      "success_rate": 0.0,
+      "runs": [
+        {
+          "ok": false,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": false,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": false
+          },
+          "error": null,
+          "latency_ms": 2319,
+          "output_tokens": 184,
+          "got": {
+            "city": "Алматы",
+            "districts": [
+              "Медеуский"
+            ],
+            "rooms": [
+              3
+            ],
+            "views": [
+              "park"
+            ],
+            "semantic_query": "двор без машин"
+          }
+        }
+      ]
+    },
+    {
+      "id": "n21",
+      "query": "элитная квартира с панорамным видом на город, высокий этаж",
+      "tags": [
+        "slang",
+        "view",
+        "floor",
+        "class"
+      ],
+      "expected": {
+        "classes": [
+          "business"
+        ],
+        "views": [
+          "city"
+        ],
+        "floor_min": 10
+      },
+      "semantic": "any",
+      "success_rate": 0.0,
+      "runs": [
+        {
+          "ok": false,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": false,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": true,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": false,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": false,
+            "orientations": true,
+            "needs_clarification": false
+          },
+          "error": null,
+          "latency_ms": 7931,
+          "output_tokens": 1024,
+          "got": {
+            "needs_clarification": "Город не назван, а вид на город бывает и в Алматы, и в Астане, поэтому ищу без города."
+          }
+        }
+      ]
+    },
+    {
+      "id": "n22",
+      "query": "квартира с видом на горы в Астане",
+      "tags": [
+        "clarify"
+      ],
+      "expected": {
+        "needs_clarification": true
+      },
+      "semantic": "any",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "needs_clarification": true
+          },
+          "error": null,
+          "latency_ms": 1947,
+          "output_tokens": 79,
+          "got": {
+            "needs_clarification": "В Астане гор нет, поэтому вид на горы там невозможен. Что вам подойдёт больше: искать квартиры с видом на горы в Алматы или остаться в Астане с другим видом (на город, парк, реку)?"
+          }
+        }
+      ]
+    },
+    {
+      "id": "n23",
+      "query": "снять однушку в новостройке",
+      "tags": [
+        "clarify",
+        "rent"
+      ],
+      "expected": {
+        "needs_clarification": true
+      },
+      "semantic": "any",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "needs_clarification": true
+          },
+          "error": null,
+          "latency_ms": 2562,
+          "output_tokens": 72,
+          "got": {
+            "needs_clarification": "Аренды у нас нет: в базе только продажа квартир в новостройках. Хотите посмотреть однушки на покупку? Если да, уточните город (Алматы или Астана) и примерный бюджет."
+          }
+        }
+      ]
+    },
+    {
+      "id": "n24",
+      "query": "двушка у метро в Астане",
+      "tags": [
+        "clarify",
+        "metro"
+      ],
+      "expected": {
+        "needs_clarification": true
+      },
+      "semantic": "any",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "needs_clarification": true
+          },
+          "error": null,
+          "latency_ms": 3459,
+          "output_tokens": 86,
+          "got": {
+            "needs_clarification": "В Астане метро нет, поэтому фильтр «рядом метро» там не сработает. Что для вас важнее: найти двушку в Астане без привязки к метро (например, рядом с остановками и транспортом) или двушку у метро в Алматы?"
+          }
+        }
+      ]
+    },
+    {
+      "id": "n25",
+      "query": "трёшка в Алматы за 3 млн",
+      "tags": [
+        "clarify",
+        "price"
+      ],
+      "expected": {
+        "needs_clarification": true
+      },
+      "semantic": "any",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "needs_clarification": true
+          },
+          "error": null,
+          "latency_ms": 1893,
+          "output_tokens": 94,
+          "got": {
+            "needs_clarification": "Трёшка в Алматы за 3 млн ₸ — цена на порядок ниже реальной для новостройки. Возможно, опечатка: вы имели в виду 30 млн, 300 млн или другую сумму? Уточните бюджет, и я сразу поищу."
+          }
+        }
+      ]
+    },
+    {
+      "id": "n26",
+      "query": "квартира в Сарыаркинском районе до 25 млн с предчистовой отделкой",
+      "tags": [
+        "finishing"
+      ],
+      "expected": {
+        "city": "Астана",
+        "districts": [
+          "Сарыаркинский"
+        ],
+        "price_max_kzt": 25000000,
+        "finishing": [
+          "pre_finish"
+        ]
+      },
+      "semantic": "empty",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": true,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 2386,
+          "output_tokens": 177,
+          "got": {
+            "city": "Астана",
+            "districts": [
+              "Сарыаркинский"
+            ],
+            "price_max_kzt": 25000000,
+            "finishing": [
+              "pre_finish"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "n27",
+      "query": "однушка в Астане в ЖК рядом с бизнес-центрами и ресторанами",
+      "tags": [
+        "semantic"
+      ],
+      "expected": {
+        "city": "Астана",
+        "rooms": [
+          1
+        ]
+      },
+      "semantic": "required",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": true,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 2609,
+          "output_tokens": 180,
+          "got": {
+            "city": "Астана",
+            "rooms": [
+              1
+            ],
+            "semantic_query": "рядом бизнес-центры и рестораны, развитая городская инфраструктура"
+          }
+        }
+      ]
+    },
+    {
+      "id": "n28",
+      "query": "Алматы, комплекс в зелёном районе с чистым воздухом, подальше от центра",
+      "tags": [
+        "semantic"
+      ],
+      "expected": {
+        "city": "Алматы"
+      },
+      "semantic": "required",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": true,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 2520,
+          "output_tokens": 146,
+          "got": {
+            "city": "Алматы",
+            "semantic_query": "зелёный район, чистый воздух, подальше от центра, рядом природа и парк"
+          }
+        }
+      ]
+    },
+    {
+      "id": "n29",
+      "query": "трёшка в Астане, где во дворе много зелени и деревьев",
+      "tags": [
+        "semantic"
+      ],
+      "expected": {
+        "city": "Астана",
+        "rooms": [
+          3
+        ]
+      },
+      "semantic": "required",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": true,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1961,
+          "output_tokens": 138,
+          "got": {
+            "city": "Астана",
+            "rooms": [
+              3
+            ],
+            "semantic_query": "во дворе много зелени и деревьев"
+          }
+        }
+      ]
+    },
+    {
+      "id": "n30",
+      "query": "квартира в Алматы для любителей походов и лыж, чтобы до гор было недалеко",
+      "tags": [
+        "semantic"
+      ],
+      "expected": {
+        "city": "Алматы"
+      },
+      "semantic": "required",
+      "success_rate": 0.0,
+      "runs": [
+        {
+          "ok": false,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": true,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": false,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 2464,
+          "output_tokens": 156,
+          "got": {
+            "city": "Алматы",
+            "views": [
+              "mountains"
+            ],
+            "semantic_query": "для любителей походов и лыж, близко к горам, рядом выезд к горам и паркам"
+          }
+        }
+      ]
+    },
+    {
+      "id": "n31",
+      "query": "бизнес-класс в Алматы, современная архитектура и стильный фасад",
+      "tags": [
+        "semantic",
+        "class"
+      ],
+      "expected": {
+        "city": "Алматы",
+        "classes": [
+          "business"
+        ]
+      },
+      "semantic": "required",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": true,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 1797,
+          "output_tokens": 126,
+          "got": {
+            "city": "Алматы",
+            "classes": [
+              "business"
+            ],
+            "semantic_query": "современная архитектура, стильный фасад"
+          }
+        }
+      ]
+    },
+    {
+      "id": "n32",
+      "query": "двушка в Алматы в спокойном месте для пожилых родителей",
+      "tags": [
+        "semantic"
+      ],
+      "expected": {
+        "city": "Алматы",
+        "rooms": [
+          2
+        ]
+      },
+      "semantic": "required",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": true,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 4655,
+          "output_tokens": 159,
+          "got": {
+            "city": "Алматы",
+            "rooms": [
+              2
+            ],
+            "semantic_query": "спокойное тихое место для пожилых родителей"
+          }
+        }
+      ]
+    },
+    {
+      "id": "n33",
+      "query": "Астана, ЖК рядом со спортивными площадками и фитнесом, для активной семьи",
+      "tags": [
+        "semantic"
+      ],
+      "expected": {
+        "city": "Астана"
+      },
+      "semantic": "required",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": true,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 2929,
+          "output_tokens": 122,
+          "got": {
+            "city": "Астана",
+            "semantic_query": "рядом спортивные площадки и фитнес, для активной семьи"
+          }
+        }
+      ]
+    },
+    {
+      "id": "n34",
+      "query": "квартира в Алматы, чтобы пешком до кафе, театров и магазинов",
+      "tags": [
+        "semantic"
+      ],
+      "expected": {
+        "city": "Алматы"
+      },
+      "semantic": "required",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": true,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 2572,
+          "output_tokens": 138,
+          "got": {
+            "city": "Алматы",
+            "semantic_query": "пешком до кафе, театров и магазинов, развитая городская инфраструктура, центр"
+          }
+        }
+      ]
+    },
+    {
+      "id": "n35",
+      "query": "ЖК в Астане для молодой семьи с детскими площадками во дворе, до 35 млн",
+      "tags": [
+        "semantic"
+      ],
+      "expected": {
+        "city": "Астана",
+        "price_max_kzt": 35000000
+      },
+      "semantic": "required",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": true,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 2900,
+          "output_tokens": 148,
+          "got": {
+            "city": "Астана",
+            "price_max_kzt": 35000000,
+            "semantic_query": "для молодой семьи с детьми, детские площадки во дворе"
+          }
+        }
+      ]
+    },
+    {
+      "id": "n36",
+      "query": "двушка в Алматы рядом с большим торговым центром, чтобы всё было под рукой",
+      "tags": [
+        "semantic"
+      ],
+      "expected": {
+        "city": "Алматы",
+        "rooms": [
+          2
+        ]
+      },
+      "semantic": "required",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": true,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 2544,
+          "output_tokens": 166,
+          "got": {
+            "city": "Алматы",
+            "rooms": [
+              2
+            ],
+            "semantic_query": "рядом большой торговый центр, развитая инфраструктура, всё под рукой"
+          }
+        }
+      ]
+    },
+    {
+      "id": "n37",
+      "query": "трёшка в Алматы подальше от шумных проспектов, тихая улица",
+      "tags": [
+        "semantic"
+      ],
+      "expected": {
+        "city": "Алматы",
+        "rooms": [
+          3
+        ]
+      },
+      "semantic": "required",
+      "success_rate": 1.0,
+      "runs": [
+        {
+          "ok": true,
+          "checks": {
+            "city": true,
+            "districts": true,
+            "classes": true,
+            "completion_max_year": true,
+            "completion_max_quarter": true,
+            "delivered_only": true,
+            "features": true,
+            "payment": true,
+            "rooms": true,
+            "price_min_kzt": true,
+            "price_max_kzt": true,
+            "area_min_m2": true,
+            "area_max_m2": true,
+            "floor_min": true,
+            "floor_max": true,
+            "not_first_floor": true,
+            "not_last_floor": true,
+            "finishing": true,
+            "windows": true,
+            "views": true,
+            "orientations": true,
+            "needs_clarification": true,
+            "semantic_query": true
+          },
+          "error": null,
+          "latency_ms": 2017,
+          "output_tokens": 150,
+          "got": {
+            "city": "Алматы",
+            "rooms": [
+              3
+            ],
+            "semantic_query": "тихая улица, подальше от шумных проспектов, тихий двор"
+          }
+        }
+      ]
+    }
+  ]
+}

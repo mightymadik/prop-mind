@@ -47,7 +47,8 @@ def _lit(values) -> Any:
 
 
 def tool_models(cfg: AppConfig) -> dict[str, type[BaseModel]]:
-    """Схемы входа инструментов: словари — Literal из конфига, все поля обязательны (strict)."""
+    """Схемы входа инструментов: словари — Literal из конфига, все поля обязательны (strict): с
+    необязательными полями модель молча теряет условия (разбор dev 95% → 65%, decisions.md)."""
     forbid = ConfigDict(extra="forbid")
     parser = build_parser_schema(cfg)
     search = {
