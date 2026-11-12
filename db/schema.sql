@@ -58,5 +58,9 @@ CREATE TABLE query_log (
   timings_ms         JSONB,                 -- по этапам: parse, embed, search, rerank, ttft, answer
   cost_usd           NUMERIC(10,6),         -- оценка сверху: бесплатные токены не учитываются
   flagged_source_ids TEXT[],                -- показанные объекты с признаками вставки или набивки — на модерацию
+  mode               TEXT NOT NULL DEFAULT 'v1' CHECK (mode IN ('v1', 'v2')),  -- v1 — workflow, v2 — агент
+  tool_calls         TEXT[],                -- v2: вызванные инструменты по порядку, без аргументов
+  history_turns      INT,                   -- v2: сколько реплик истории пришло (текст не пишем)
+  history_rejected   INT,                   -- v2: реплики ассистента с неверной или просроченной подписью
   created_at         TIMESTAMPTZ NOT NULL DEFAULT now()
 );
