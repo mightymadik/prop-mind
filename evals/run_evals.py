@@ -145,14 +145,16 @@ def _stop_at_search(conn, query, cfg, settings, filters, embed_fn=None, rerank_f
 
 
 def run_agent_case(case: dict, cfg, settings) -> dict:
-    """Разбор агентом: аргументы первого search_listings; ответ без инструментов — уточнение.
-    Время и токены — до первого поиска (обычно один вызов модели)."""
+    """Разбор агентом по цепочке «query агента → парсер»: фильтры первого поиска; уточнение от парсера
+    или ответ без инструментов — needs_clarification. Время и токены — до первого поиска."""
     t = time.perf_counter()
     error = None
     with track() as ledger:
         try:
             res = agent.run_agent(None, case["query"], "", cfg, settings)
-            if res.tool_calls:  # первым вызван не поиск — разбора нет
+            if res.first_filters is not None:  # парсер попросил уточнить — до поиска не дошло
+                got = res.first_filters
+            elif res.tool_calls:  # первым вызван не поиск — разбора нет
                 got, error = None, f"no search: {res.tool_calls}"
             else:
                 got = SearchFilters(needs_clarification=res.text or "?")
@@ -168,7 +170,7 @@ def run_agent_case(case: dict, cfg, settings) -> dict:
         "checks": checks,
         "error": error,
         "latency_ms": latency,
-        "output_tokens": sum(o for _, o in ledger.tokens.values()),
+        "output_tokens": sum(t[1] for t in ledger.tokens.values()),
         "got": {k: v for k, v in got.model_dump().items() if _norm(v) != _norm(defaults[k])} if got else None,
     }
 

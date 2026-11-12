@@ -94,8 +94,8 @@ def check(c: dict, turns: list, conn, cfg, settings, query: str) -> tuple[bool, 
             settings,
         )
         return v.verdict, v.reason
-    if t == "no_tools":
-        return not res.tool_calls, f"вызовы: {res.tool_calls}"
+    if t == "clarify":  # вопрос вместо выдачи: без инструментов или по просьбе разбора поиска
+        return res.clarified, f"вызовы: {res.tool_calls}, показано ЖК: {len(res.source_ids)}"
     raise ValueError(f"неизвестная проверка {t}")
 
 
@@ -132,6 +132,8 @@ def main() -> None:
                         "invalid_refs": res.invalid_refs,
                         "rounds": res.rounds,
                         "total_ms": res.total_ms,
+                        "timings_ms": res.timings_ms,
+                        "llm_calls": res.llm_calls,
                         "history_rejected": rejected,
                         "cost_usd": round(ledger.cost_usd(cfg.pricing), 6),
                     }
@@ -140,6 +142,10 @@ def main() -> None:
                 if turn := res.assistant_turn(SECRET):
                     history.append(turn)
             verdicts = []
+            first = calls(turns[0], "search_listings")
+            if first:  # первый поиск без истории — сообщение пользователя дословно
+                ok = " ".join(first[0]["input"]["query"].split()) == " ".join(case["turns"][0].split())
+                verdicts.append({"check": "query_verbatim", "turn": 1, "ok": ok, "why": first[0]["input"]["query"]})
             for c in case["checks"]:
                 ok, why = check(c, turns, conn, cfg, settings, case["turns"][c["turn"] - 1])
                 verdicts.append({"check": c["type"], "turn": c["turn"], "ok": ok, "why": why})
@@ -155,6 +161,9 @@ def main() -> None:
             )
 
     total = [r["total_ms"] for x in results for r in x["turns"]]
+    first_token = [
+        r["timings_ms"]["first_token"] for x in results for r in x["turns"] if "first_token" in r["timings_ms"]
+    ]
     summary = {
         "passed": sum(x["passed"] for x in results),
         "of": len(results),
@@ -169,6 +178,7 @@ def main() -> None:
         "invalid_refs": sum(len(r["invalid_refs"]) for x in results for r in x["turns"]),
         "history_rejected": sum(r["history_rejected"] for x in results for r in x["turns"]),
         "total_ms": {"p50": pct(total, 0.5), "p95": pct(total, 0.95)},
+        "first_token_ms": {"p50": pct(first_token, 0.5), "p95": pct(first_token, 0.95)},  # если стримить финальный
         "usd_per_turn": round(sum(r["cost_usd"] for x in results for r in x["turns"]) / len(total), 6),
     }
     now = datetime.now(UTC)

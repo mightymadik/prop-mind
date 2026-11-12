@@ -8,5 +8,5 @@
 {"id": "a08", "tags": ["stats"], "turns": ["какая сейчас средняя цена за квадратный метр в Медеуском районе?"], "checks": [{"type": "stats", "turn": 1}]}
 {"id": "a09", "tags": ["stats"], "turns": ["сколько в среднем стоят четырёхкомнатные комфорт-класса в Байконурском районе?"], "checks": [{"type": "stats_low", "turn": 1}]}
 {"id": "a10", "tags": ["relax"], "turns": ["двушка в Турксибском районе рядом с метро и с детским садом в ЖК"], "checks": [{"type": "relaxed", "turn": 1}]}
-{"id": "a11", "tags": ["clarify"], "turns": ["хочу квартиру"], "checks": [{"type": "no_tools", "turn": 1}]}
-{"id": "a12", "tags": ["clarify"], "turns": ["квартира у метро в Астане"], "checks": [{"type": "no_tools", "turn": 1}]}
+{"id": "a11", "tags": ["clarify"], "turns": ["хочу квартиру"], "checks": [{"type": "clarify", "turn": 1}]}
+{"id": "a12", "tags": ["clarify"], "turns": ["квартира у метро в Астане"], "checks": [{"type": "clarify", "turn": 1}]}
