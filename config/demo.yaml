@@ -42,6 +42,7 @@ models:
   parser: claude-haiku-5-5       # шаг 2
   labeler: claude-opus-5-5       # разметка relevant для смысловых кейсов (scripts/label_catalog.py)
   judge: claude-haiku-5-5        # судья в evals ответа: узкие проверки да/нет
+  agent: claude-sonnet-5-5        # v2 (tool use); настройки модели — answer.models
 
 embeddings:
   provider: voyage
@@ -114,6 +115,8 @@ mortgage:                        # калькулятор агента (6.4); к
 
 agent:
   price_stats_min_count: 5       # меньше свободных квартир в выборке — «мало данных» вместо медианы
+  max_tool_calls: 6              # вызовов инструментов за ход; дальше — tool_choice: none
+  max_search_calls: 3            # из них search_listings
   history_max_turns: 6           # последние реплики диалога (история приходит с клиента)
   history_max_chars: 6000        # лимит текста истории; старые реплики выпадают первыми
   history_assistant_chars: 600   # подписанная реплика ассистента — обрезается до стольких символов

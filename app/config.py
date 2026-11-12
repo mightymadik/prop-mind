@@ -78,6 +78,8 @@ class MortgageProgram(BaseModel):
 
 class AgentConfig(BaseModel):
     price_stats_min_count: int = 5  # меньше квартир в выборке — «мало данных» вместо медианы
+    max_tool_calls: int = 6  # вызовов инструментов за ход; после — tool_choice: none
+    max_search_calls: int = 3  # из них search_listings
     history_max_turns: int = 6  # последние реплики диалога, которые видит агент
     history_max_chars: int = 6000  # и не больше стольких символов текста реплик — старые выпадают первыми
     history_assistant_chars: int = 600  # подписанная реплика ассистента обрезается до стольких символов
