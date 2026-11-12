@@ -116,6 +116,7 @@ class AgentResult:
     served_model: str | None = None
     fallback: bool = False
     rounds: int = 0
+    timings_ms: dict[str, int] = field(default_factory=dict)  # этапы поиска (сумма по вызовам), ttft, answer
     ttft_ms: int | None = None  # до первого токена финального ответа у пользователя
     total_ms: int = 0
     input_tokens: int = 0
@@ -155,7 +156,7 @@ def run_agent(
     rerank_fn: Callable[[object, list[str], str], list[str]] | None = None,
 ) -> AgentResult:
     """Один ход диалога. history — готовый блок <history> (app.history.render_history) или пусто.
-    События: tool {label}, results {hits, relaxed}, delta {text}."""
+    События: tool {label}, filters {filters}, results {hits, relaxed}, delta {text}."""
     model = model or cfg.models["agent"]
     mcfg = cfg.answer.models[model]
     client = client or anthropic.Anthropic(api_key=settings.anthropic_api_key or None)
@@ -189,7 +190,10 @@ def run_agent(
             f = SearchFilters(**args.model_dump())
             res.first_filters = res.first_filters or f
             searches += 1
+            emit("filters", {"filters": f})
             r = retrieve(conn, query, cfg, settings, filters=f, embed_fn=embed_fn, rerank_fn=rerank_fn)
+            for stage, ms in r.timings_ms.items():
+                res.timings_ms[stage] = res.timings_ms.get(stage, 0) + ms
             lines = ["Ослаблено поиском: " + (", ".join(RELAX_TEXT.get(x, x) for x in r.relaxed) or "ничего")]
             lines += [hit_line(reg.add(h), h, cfg.catalog) for h in r.hits] or ["Ничего не найдено."]
             emit("results", {"hits": [reg.hits[i] for i in reg.ids], "relaxed": r.relaxed})
@@ -264,6 +268,9 @@ def run_agent(
     if rest := guard.flush():
         emit("delta", {"text": rest})
     res.total_ms = int((time.perf_counter() - t0) * 1000)
+    res.timings_ms["answer"] = res.total_ms
+    if res.ttft_ms is not None:
+        res.timings_ms["ttft"] = res.ttft_ms
     res.raw_text = raw
     res.source_ids, res.hits = list(reg.ids), [reg.hits[i] for i in reg.ids]
     res.text, res.invalid_refs, res.cited = resolve_refs(strip_contacts(raw, cfg.moderation.allowed_contacts), reg.ids)

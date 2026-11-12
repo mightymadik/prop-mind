@@ -22,7 +22,7 @@ class Conn:
 
 
 def render(turns, now=NOW):
-    return render_history(Conn(), turns, CFG, SECRET, now)
+    return render_history(Conn(), turns, CFG, SECRET, now)[0]
 
 
 def test_signed_turn_text_reaches_history_truncated():
@@ -43,6 +43,7 @@ def test_tampered_or_expired_signature_drops_assistant_text():
         out = render([turn], now)
         assert "Лучший" not in out and "(текст ответа не передан)" in out
         assert "ЖК Имя cx-" in out  # source_ids остаются — их перепроверили по базе
+        assert render_history(Conn(), [ChatTurn(role="user", text="q"), turn], CFG, SECRET, now)[1] == 1
     assert not verified(t, "", CFG.history_signed_ttl_hours, NOW)  # без секрета подписи не принимаются
 
 

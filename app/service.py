@@ -8,11 +8,13 @@ from collections.abc import Callable
 from app.config import AppConfig, Settings
 from app.costs import track
 from app.db import connect
+from app.history import render_history
+from app.llm.agent import AgentResult, run_agent
 from app.llm.answer import completion_text, generate_answer
 from app.moderation import is_stuffed, looks_injected
 from app.pii import mask_pii
 from app.pipeline import Retrieval, retrieve
-from app.schemas import SearchFilters
+from app.schemas import ChatTurn, SearchFilters
 from app.search.catalog import ComplexHit
 
 log_ = logging.getLogger(__name__)
@@ -20,10 +22,11 @@ Event = Callable[[str, dict], None]
 
 LOG_SQL = """
 INSERT INTO query_log (query, filters, relaxed, clarification, result_source_ids, answer_model, fallback,
-                       invalid_refs, error, latency_ms, timings_ms, cost_usd, flagged_source_ids)
+                       invalid_refs, error, latency_ms, timings_ms, cost_usd, flagged_source_ids,
+                       mode, tool_calls, history_turns, history_rejected)
 VALUES (%(query)s, %(filters)s, %(relaxed)s, %(clarification)s, %(result_source_ids)s, %(answer_model)s,
         %(fallback)s, %(invalid_refs)s, %(error)s, %(latency_ms)s, %(timings_ms)s, %(cost_usd)s,
-        %(flagged_source_ids)s)
+        %(flagged_source_ids)s, %(mode)s, %(tool_calls)s, %(history_turns)s, %(history_rejected)s)
 """
 
 
@@ -202,5 +205,104 @@ def log(payload: dict, r: Retrieval | None, answer) -> None:
         "cost_usd": payload.get("cost_usd"),
         "flagged_source_ids": payload.get("flagged") or None,
     }
+    insert_log(row)
+
+
+def insert_log(row: dict) -> None:
+    """Строка query_log; поля, которых у режима нет, — NULL (mode по умолчанию — v1)."""
+    row = {"mode": "v1", "tool_calls": None, "history_turns": None, "history_rejected": None} | row
     with connect() as conn:
         conn.execute(LOG_SQL, row)
+
+
+def run_agent_search(
+    query: str, history: list[ChatTurn], cfg: AppConfig, settings: Settings, on_event: Event | None = None
+) -> dict:
+    """Ход агента (v2) целиком: история → агент → query_log. События: tool, filters, results, delta*,
+    answer, done. turn — подписанная реплика для истории клиента (null при отказе)."""
+    emit = on_event or (lambda name, data: None)
+    t0 = time.perf_counter()
+    payload: dict = {"query": query, "error": None, "history_turns": len(history)}
+    res: AgentResult | None = None
+    with track() as ledger:
+        try:
+
+            def relay(name: str, data: dict) -> None:
+                if name == "filters":
+                    f = data["filters"]
+                    emit("filters", {"filters": f.model_dump(exclude_defaults=True), "chips": catalog_chips(f, cfg)})
+                elif name == "results":
+                    payload["results"] = [complex_card(h, cfg) for h in data["hits"]]
+                    emit("results", {"relaxed": data["relaxed"], "results": payload["results"]})
+                else:
+                    emit(name, data)
+
+            # ponytail: соединение держится весь ход (инструменты — посреди цикла), ~5–20 с; пул — при нагрузке
+            with connect() as conn:
+                block, payload["history_rejected"] = render_history(conn, history, cfg.agent, settings.history_secret)
+                res = run_agent(conn, query, block, cfg, settings, on_event=relay)
+            turn = res.assistant_turn(settings.history_secret)  # без секрета подпись не примут — останутся source_ids
+            payload |= {
+                "results": [complex_card(h, cfg) for h in res.hits],
+                "flagged": flagged_complexes(res.hits, cfg),  # на модерацию; пользователю не показываем
+                "answer": res.text,
+                "invalid_refs": res.invalid_refs,
+                "clarified": res.clarified,
+                "tool_calls": res.tool_calls,
+                "turn": turn.model_dump() if turn else None,
+            }
+            emit(
+                "answer",
+                {
+                    "text": res.text,
+                    "invalid_refs": res.invalid_refs,
+                    "cited": res.cited,
+                    "clarified": res.clarified,
+                    "turn": payload["turn"],
+                },
+            )
+        except Exception as e:
+            payload["error"] = f"{e.__class__.__name__}: {e}"
+            raise
+        finally:
+            payload["timings_ms"] = dict(res.timings_ms) if res else {}
+            payload["latency_ms"] = int((time.perf_counter() - t0) * 1000)
+            try:
+                payload["cost_usd"] = round(ledger.cost_usd(cfg.pricing), 6)
+            except KeyError:
+                payload["cost_usd"] = None
+            try:
+                log_agent(payload, res)
+            except Exception:  # журнал не должен ломать ответ и подменять исходную ошибку
+                log_.exception("query_log write failed")
+    emit(
+        "done",
+        {"timings_ms": payload["timings_ms"], "latency_ms": payload["latency_ms"], "cost_usd": payload["cost_usd"]},
+    )
+    return payload
+
+
+def log_agent(payload: dict, res: AgentResult | None) -> None:
+    """Строка v2: без текста истории и аргументов инструментов — только имена и счётчики."""
+    f = res.first_filters if res else None
+    insert_log(
+        {
+            "mode": "v2",
+            "query": mask_pii(payload["query"]),
+            "filters": json.dumps(f.model_dump(exclude_defaults=True), ensure_ascii=False) if f else None,
+            "relaxed": None,
+            "clarification": res.text if res and res.clarified else None,
+            "result_source_ids": res.source_ids if res else None,
+            "answer_model": res.served_model if res else None,
+            "fallback": res.fallback if res else None,
+            "invalid_refs": len(res.invalid_refs) if res else None,
+            "error": payload.get("error"),
+            "latency_ms": payload["latency_ms"],
+            "timings_ms": json.dumps(payload["timings_ms"]),
+            "cost_usd": payload.get("cost_usd"),
+            "flagged_source_ids": payload.get("flagged") or None,
+            "tool_calls": res.tool_calls if res else None,
+            "history_turns": payload["history_turns"],
+            "history_rejected": payload.get("history_rejected"),
+        }
+    )
