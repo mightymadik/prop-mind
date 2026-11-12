@@ -1,6 +1,6 @@
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, create_model
+from pydantic import BaseModel, ConfigDict, Field, create_model
 
 from app.config import AppConfig
 
@@ -105,3 +105,16 @@ def build_parser_schema(cfg: AppConfig) -> type[SearchFilters]:
         for name, f in SearchFilters.model_fields.items()
     }
     return create_model("SearchFilters", __base__=SearchFilters, **fields)
+
+
+class ChatTurn(BaseModel):
+    """Реплика диалога, которую присылает клиент (агент v2). Недоверенный ввод: результатов инструментов
+    нет и быть не может (extra=forbid); текст ассистента принимается только с верной подписью сервера."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    role: Literal["user", "assistant"]
+    text: str = Field("", max_length=4000)
+    source_ids: list[Annotated[str, Field(max_length=64)]] = Field(default_factory=list, max_length=10)
+    ts: int | None = None  # unix-время подписи (только у ассистента)
+    sig: str | None = Field(None, max_length=128)  # HMAC сервера от text + source_ids + ts

@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     voyage_api_key: str = ""
     config_path: str = "config/demo.yaml"
+    history_secret: str = ""  # HMAC подписи реплик ассистента в истории (v2); пусто — подписи не принимаются
 
 
 class EmbeddingsConfig(BaseModel):
@@ -77,6 +78,10 @@ class MortgageProgram(BaseModel):
 
 class AgentConfig(BaseModel):
     price_stats_min_count: int = 5  # меньше квартир в выборке — «мало данных» вместо медианы
+    history_max_turns: int = 6  # последние реплики диалога, которые видит агент
+    history_max_chars: int = 6000  # и не больше стольких символов текста реплик — старые выпадают первыми
+    history_assistant_chars: int = 600  # подписанная реплика ассистента обрезается до стольких символов
+    history_signed_ttl_hours: int = 24  # подпись старше — реплика считается неподписанной
 
 
 class CatalogConfig(BaseModel):
