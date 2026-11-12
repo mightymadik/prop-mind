@@ -46,6 +46,14 @@ class AnswerConfig(BaseModel):
 class Price(BaseModel):
     input: float  # $ за 1 млн токенов
     output: float
+    cache_write: float | None = None  # запись в кэш промпта (5 мин); не задано — 1,25 × input
+    cache_read: float | None = None  # чтение кэша; не задано — 0,1 × input
+
+    def write_price(self) -> float:
+        return self.cache_write if self.cache_write is not None else self.input * 1.25
+
+    def read_price(self) -> float:
+        return self.cache_read if self.cache_read is not None else self.input * 0.1
 
 
 class LimitsConfig(BaseModel):

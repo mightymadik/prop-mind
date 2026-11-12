@@ -67,8 +67,8 @@ answer:
       thinking: {type: disabled}        # допустимо при effort ≤ high (по умолчанию medium)
 
 pricing:                         # $ за 1 млн токенов (прайс Anthropic)
-  claude-sonnet-5-5: {input: 2.0, output: 10.0}
-  claude-haiku-5-5: {input: 0.10, output: 0.50}   # до 100K токенов в промпте
+  claude-sonnet-5-5: {input: 2.0, output: 10.0, cache_write: 2.5, cache_read: 0.20}
+  claude-haiku-5-5: {input: 0.10, output: 0.50, cache_write: 0.125, cache_read: 0.01}   # до 100K токенов в промпте
   voyage-3.5: {input: 0.06, output: 0}            # эмбеддинги; бесплатных токенов нет
   rerank-2.5: {input: 0.05, output: 0}            # 200 млн бесплатно — cost_usd считается без них
   rerank-3: {input: 0.05, output: 0}
