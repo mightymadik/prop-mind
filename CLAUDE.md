@@ -37,6 +37,9 @@ v1 — фиксированный workflow. v2 (tool use) — только по�
 - Разметка смысловых кейсов: `uv run python scripts/label_catalog.py review|apply`
 - Evals: разбор `uv run python evals/run_evals.py --repeats 3`; поиск `--layer search --parsed-from <отчёт>`;
   ответ `--layer answer --models claude-sonnet-5-5 --judge --parsed-from <отчёт>`; red-team `evals/run_redteam.py`
+- Evals агента (v2): разбор `uv run python evals/run_evals.py --agent`; ответ и судья `--layer agent-answer --tag <метка>`;
+  кейсы `uv run python evals/run_agent_cases.py`; red-team `evals/run_redteam.py --mode v2 --tag <метка>`
+- Режим страницы чата — `chat.mode` в конфиге (`v2` — агент `/agent`, `v1` — `/search`); `GET /chat/config`
 - Git-хук атрибуции: `git config core.hooksPath .githooks` (один раз, вручную)
 
 (Обновляй этот раздел, когда команды появятся или изменятся.)
