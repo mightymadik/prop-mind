@@ -49,6 +49,12 @@ def record(
         ledger.add(model, input_tokens, output_tokens, cache_write, cache_read)
 
 
+def absorb(other: Ledger) -> None:
+    """Токены отдельного счётчика (например, фоновой задачи) — в текущий."""
+    for model, tokens in other.tokens.items():
+        record(model, *tokens)
+
+
 def record_usage(model: str, usage) -> None:
     """Токены ответа Anthropic, включая кэш промпта: input_tokens кэшированную часть не содержат."""
     record(
@@ -61,8 +67,9 @@ def record_usage(model: str, usage) -> None:
 
 
 @contextmanager
-def track() -> Iterator[Ledger]:
-    ledger = Ledger()
+def track(ledger: Ledger | None = None) -> Iterator[Ledger]:
+    """ledger — уже созданный счётчик (например, для фоновой задачи: его читает другой поток)."""
+    ledger = ledger if ledger is not None else Ledger()
     token = _current.set(ledger)
     try:
         yield ledger

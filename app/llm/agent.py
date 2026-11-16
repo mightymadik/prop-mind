@@ -5,8 +5,10 @@
 нет: он пишется до результатов инструментов и может не подтвердиться."""
 
 import json
+import threading
 import time
 from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal
 
@@ -14,13 +16,13 @@ import anthropic
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model
 
 from app.config import AppConfig, Settings
-from app.costs import record_usage
+from app.costs import Ledger, absorb, record_usage, track
 from app.history import signed_turn
 from app.llm.answer import FALLBACK_BETA, REFUSAL_TEXT, RELAX_TEXT, hit_line, resolve_refs
 from app.llm.client import load_prompt
 from app.llm.parser import parse_query
 from app.moderation import ContactFilter, strip_contacts
-from app.pipeline import retrieve
+from app.pipeline import Retrieval, retrieve
 from app.schemas import ChatTurn, SearchFilters
 from app.search.catalog import ComplexHit
 from app.tools import ToolError, get_listing, mortgage_payment, price_stats
@@ -125,6 +127,7 @@ class AgentResult:
     rounds: int = 0
     timings_ms: dict[str, int] = field(default_factory=dict)  # этапы поиска (сумма), llm1, llm2…, answer
     llm_calls: list[dict] = field(default_factory=list)  # по вызову модели: ms, input/output tokens, stop
+    prefetch: dict | None = None  # фоновый разбор и поиск первого хода: {state: used|unused|failed, usd}
     ttft_ms: int | None = None  # до первого токена финального ответа у пользователя
     total_ms: int = 0
     input_tokens: int = 0
@@ -149,6 +152,69 @@ def echo_blocks(content: list) -> list:
     fallback, кроме текста, не возвращаются (thinking отказавшей модели, её незавершённые tool_use)."""
     cut = max((i for i, b in enumerate(content) if b.type == "fallback"), default=-1)
     return [b for i, b in enumerate(content) if b.type != "fallback" and (i > cut or b.type == "text")]
+
+
+def _norm(text: str) -> str:
+    return " ".join(text.split())
+
+
+def parse_and_search(
+    conn, query: str, cfg: AppConfig, settings: Settings, embed_fn, rerank_fn, cancel: threading.Event | None = None
+) -> tuple[SearchFilters, Retrieval | None, int]:
+    """Разбор запроса парсером v1 и поиск по его фильтрам; уточнение или отмена — без поиска."""
+    t = time.perf_counter()
+    f = parse_query(query, cfg, settings)
+    parse_ms = int((time.perf_counter() - t) * 1000)
+    if f.needs_clarification or (cancel is not None and cancel.is_set()):
+        return f, None, parse_ms
+    return f, retrieve(conn, query, cfg, settings, filters=f, embed_fn=embed_fn, rerank_fn=rerank_fn), parse_ms
+
+
+@dataclass
+class Prefetch:
+    """Первый ход без истории: модель почти всегда вызывает поиск с сообщением пользователя дословно, поэтому
+    разбор и поиск запускаются в фоне сразу, параллельно с первым вызовом модели (~2,5 с). Результат берётся
+    только при точном совпадении query (после нормализации пробелов); иначе задача отменяется без ожидания."""
+
+    query: str
+    future: Future
+    cancel: threading.Event
+    ledger: Ledger
+    state: str = "pending"  # used | unused | failed
+
+    @classmethod
+    def start(cls, pool: ThreadPoolExecutor, conn, query: str, cfg, settings, embed_fn, rerank_fn) -> "Prefetch":
+        cancel, ledger = threading.Event(), Ledger()  # свой счётчик: в цену запроса — когда задача закончилась
+
+        def work():
+            with track(ledger):
+                return parse_and_search(conn, query, cfg, settings, embed_fn, rerank_fn, cancel)
+
+        return cls(query, pool.submit(work), cancel, ledger)
+
+    def take(self, query: str):
+        """Готовый результат, если query совпал; None — считать заново."""
+        if self.state != "pending" or _norm(query) != _norm(self.query):
+            return None
+        try:
+            out = self.future.result()
+        except Exception:  # noqa: BLE001 — фоновая попытка не удалась: обычный путь повторит и сообщит ошибку
+            self.state = "failed"
+            return None
+        self.state = "used"
+        absorb(self.ledger)
+        return out
+
+    def close(self, pricing) -> dict:
+        """Конец хода: неиспользованная задача отменяется, ждать её не нужно."""
+        if self.state == "pending":
+            self.state = "unused"
+            self.cancel.set()
+        done = self.future.done()
+        if done and self.state != "used":
+            absorb(self.ledger)  # потрачено — значит, в цене запроса
+        usd = round(self.ledger.cost_usd(pricing), 6) if done else None
+        return {"state": self.state, "usd": usd}
 
 
 def _errors(e: ValidationError) -> str:
@@ -192,6 +258,8 @@ def run_agent(
     guard = ContactFilter(cfg.moderation.allowed_contacts)
     tool_choice = {"type": "auto"}
     t0 = time.perf_counter()
+    pool = ThreadPoolExecutor(1)
+    prefetch = None if history else Prefetch.start(pool, conn, query, cfg, settings, embed_fn, rerank_fn)
 
     def say(chunk: str) -> None:
         if safe := guard.feed(chunk):
@@ -205,16 +273,20 @@ def run_agent(
         if u.name == "search_listings":
             searches += 1
             t = time.perf_counter()
-            try:
-                f = parse_query(args.query, cfg, settings)
-            except (ValidationError, RuntimeError) as e:  # парсер уже повторил один раз
-                raise ToolError("не удалось разобрать запрос — переформулируй его") from e
-            res.timings_ms["parse"] = res.timings_ms.get("parse", 0) + int((time.perf_counter() - t) * 1000)
+            ready = prefetch.take(args.query) if prefetch else None
+            if ready:
+                res.timings_ms["prefetch_wait"] = int((time.perf_counter() - t) * 1000)
+                f, r, parse_ms = ready
+            else:
+                try:
+                    f, r, parse_ms = parse_and_search(conn, args.query, cfg, settings, embed_fn, rerank_fn)
+                except (ValidationError, RuntimeError) as e:  # парсер уже повторил один раз
+                    raise ToolError("не удалось разобрать запрос — переформулируй его") from e
+            res.timings_ms["parse"] = res.timings_ms.get("parse", 0) + parse_ms
             res.first_filters = res.first_filters or f
-            if f.needs_clarification:
+            if r is None:
                 return f"Поиск не выполнен — задай пользователю вопрос: {f.needs_clarification}"
             emit("filters", {"filters": f})
-            r = retrieve(conn, args.query, cfg, settings, filters=f, embed_fn=embed_fn, rerank_fn=rerank_fn)
             res.relaxed += [x for x in r.relaxed if x not in res.relaxed]
             for stage, ms in r.timings_ms.items():
                 res.timings_ms[stage] = res.timings_ms.get(stage, 0) + ms
@@ -255,63 +327,68 @@ def run_agent(
         except ToolError as e:
             return out | {"content": str(e), "is_error": True}
 
-    while True:
-        final = tool_choice["type"] == "none"  # без инструментов — этот ответ точно финальный: стримим
-        kwargs = base | {"tool_choice": tool_choice, "messages": messages}
-        if mcfg.fallbacks:
-            ctx = client.beta.messages.stream(**kwargs, fallbacks=mcfg.fallbacks, betas=[FALLBACK_BETA])
-        else:
-            ctx = client.messages.stream(**kwargs)
-        t_call, first_text = time.perf_counter(), None
-        with ctx as stream:
-            for chunk in stream.text_stream:
-                if first_text is None and chunk:
-                    first_text = time.perf_counter()
-                if final:
-                    say(chunk)
-            msg = stream.get_final_message()
-        res.rounds += 1
-        ms = int((time.perf_counter() - t_call) * 1000)
-        res.timings_ms[f"llm{res.rounds}"] = ms
-        u = msg.usage
-        res.llm_calls.append(
-            {
-                "ms": ms,
-                "input_tokens": u.input_tokens,
-                "output_tokens": u.output_tokens,
-                "cache_write": u.cache_creation_input_tokens or 0,
-                "cache_read": u.cache_read_input_tokens or 0,
-                "stop_reason": msg.stop_reason,
-            }
-        )
-        served = msg.model if msg.model in cfg.pricing else model
-        record_usage(served, u)
-        res.input_tokens += msg.usage.input_tokens
-        res.output_tokens += msg.usage.output_tokens
-        res.served_model, res.stop_reason = msg.model, msg.stop_reason
-        res.fallback |= any(b.type == "fallback" for b in msg.content) or (msg.model or model) != model
+    try:
+        while True:
+            final = tool_choice["type"] == "none"  # без инструментов — этот ответ точно финальный: стримим
+            kwargs = base | {"tool_choice": tool_choice, "messages": messages}
+            if mcfg.fallbacks:
+                ctx = client.beta.messages.stream(**kwargs, fallbacks=mcfg.fallbacks, betas=[FALLBACK_BETA])
+            else:
+                ctx = client.messages.stream(**kwargs)
+            t_call, first_text = time.perf_counter(), None
+            with ctx as stream:
+                for chunk in stream.text_stream:
+                    if first_text is None and chunk:
+                        first_text = time.perf_counter()
+                    if final:
+                        say(chunk)
+                msg = stream.get_final_message()
+            res.rounds += 1
+            ms = int((time.perf_counter() - t_call) * 1000)
+            res.timings_ms[f"llm{res.rounds}"] = ms
+            u = msg.usage
+            res.llm_calls.append(
+                {
+                    "ms": ms,
+                    "input_tokens": u.input_tokens,
+                    "output_tokens": u.output_tokens,
+                    "cache_write": u.cache_creation_input_tokens or 0,
+                    "cache_read": u.cache_read_input_tokens or 0,
+                    "stop_reason": msg.stop_reason,
+                }
+            )
+            served = msg.model if msg.model in cfg.pricing else model
+            record_usage(served, u)
+            res.input_tokens += msg.usage.input_tokens
+            res.output_tokens += msg.usage.output_tokens
+            res.served_model, res.stop_reason = msg.model, msg.stop_reason
+            res.fallback |= any(b.type == "fallback" for b in msg.content) or (msg.model or model) != model
 
-        if msg.stop_reason == "refusal":
-            res.refused, raw = True, REFUSAL_TEXT
-            if not final:
-                say(raw)
-            break
-        blocks = echo_blocks(msg.content)
-        uses = [b for b in blocks if b.type == "tool_use"]
-        if msg.stop_reason != "tool_use" or not uses:
-            raw = "".join(b.text for b in blocks if b.type == "text")
-            if first_text is not None:  # сколько ждал бы пользователь первых слов, если стримить финальный ответ
-                res.timings_ms["first_token"] = int((first_text - t0) * 1000)
-            if not final:
-                say(raw)
-            break
-        messages.append(
-            {"role": "assistant", "content": [b.model_dump(mode="json", exclude_none=True) for b in blocks]}
-        )
-        messages.append({"role": "user", "content": [tool_result(u) for u in uses]})  # на каждый tool_use — ответ
-        if len(res.tool_calls) >= lim.max_tool_calls:
-            tool_choice = {"type": "none"}
+            if msg.stop_reason == "refusal":
+                res.refused, raw = True, REFUSAL_TEXT
+                if not final:
+                    say(raw)
+                break
+            blocks = echo_blocks(msg.content)
+            uses = [b for b in blocks if b.type == "tool_use"]
+            if msg.stop_reason != "tool_use" or not uses:
+                raw = "".join(b.text for b in blocks if b.type == "text")
+                if first_text is not None:  # сколько ждал бы пользователь первых слов, если стримить финальный ответ
+                    res.timings_ms["first_token"] = int((first_text - t0) * 1000)
+                if not final:
+                    say(raw)
+                break
+            messages.append(
+                {"role": "assistant", "content": [b.model_dump(mode="json", exclude_none=True) for b in blocks]}
+            )
+            messages.append({"role": "user", "content": [tool_result(u) for u in uses]})  # на каждый tool_use — ответ
+            if len(res.tool_calls) >= lim.max_tool_calls:
+                tool_choice = {"type": "none"}
 
+    finally:  # и при ошибке: неиспользованную фоновую задачу отменяем, не ждём
+        if prefetch:
+            res.prefetch = prefetch.close(cfg.pricing)
+        pool.shutdown(wait=False, cancel_futures=True)
     if rest := guard.flush():
         emit("delta", {"text": rest})
     res.total_ms = int((time.perf_counter() - t0) * 1000)

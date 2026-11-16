@@ -1,4 +1,6 @@
 import json
+import threading
+import time
 from types import SimpleNamespace
 
 import anthropic
@@ -135,7 +137,8 @@ def test_search_then_answer_maps_refs_and_streams_only_final(monkeypatch):
     )
     assert r.text == "Подходит [cx-2], ещё ." and r.invalid_refs == [9] and r.cited == ["cx-2"]
     assert r.source_ids == ["cx-1", "cx-2"] and r.tool_calls == ["search_listings"] and r.rounds == 2
-    assert set(r.timings_ms) == {"parse", "llm1", "llm2", "first_token", "answer"}
+    assert set(r.timings_ms) == {"prefetch_wait", "parse", "llm1", "llm2", "first_token", "answer"}
+    assert r.prefetch == {"state": "used", "usd": 0.0}  # фоновый разбор и поиск пригодились
     assert [c["output_tokens"] for c in r.llm_calls] == [20, 20] and r.llm_calls[0]["stop_reason"] == "tool_use"
     assert r.first_filters == SearchFilters(city="Алматы", rooms=[2])
     deltas = "".join(d["text"] for n, d in events if n == "delta")
@@ -277,3 +280,50 @@ def test_prompt_cache_markers_and_first_token_timing(monkeypatch):
     }
     assert body["tools"][0]["input_schema"]["required"] == ["query"]
     assert 0 <= r.timings_ms["first_token"] <= r.timings_ms["answer"]
+
+
+def counting_parse(log: list, gate: threading.Event | None = None):
+    def parse(q, cfg, s):
+        log.append(q)
+        if gate is not None:
+            gate.wait(5)
+        return PARSED.get(q, SearchFilters())
+
+    return parse
+
+
+def test_prefetch_is_used_only_on_exact_query_match(monkeypatch):
+    log = []
+    r, _, _ = run(
+        [([search(0, q="  двушка   в Алматы ")], "tool_use"), ([text("[1]")], "end_turn")],
+        monkeypatch,
+        parse=counting_parse(log),
+    )
+    assert r.prefetch["state"] == "used" and log == ["двушка в Алматы"]  # пробелы не важны, второй разбор не нужен
+
+    log = []
+    r, _, _ = run(
+        [([search(0, q="двушка в Астане")], "tool_use"), ([text("[1]")], "end_turn")],
+        monkeypatch,
+        hits_by_call=[[hit("cx-1")], [hit("cx-1")]],  # фоновый поиск тоже берёт выдачу
+        parse=counting_parse(log),
+    )
+    assert r.prefetch["state"] == "unused" and sorted(log) == ["двушка в Алматы", "двушка в Астане"]
+    assert r.first_filters == SearchFilters(city="Астана", rooms=[2])  # взят свой разбор, а не фоновый
+
+
+def test_unused_prefetch_is_not_awaited(monkeypatch):
+    gate = threading.Event()  # фоновый разбор «висит», пока тест его не отпустит
+    t = time.perf_counter()
+    r, _, _ = run([([text("В каком городе ищете?")], "end_turn")], monkeypatch, parse=counting_parse([], gate))
+    assert time.perf_counter() - t < 2 and r.prefetch == {
+        "state": "unused",
+        "usd": None,
+    }  # не дождались — цена неизвестна
+    gate.set()
+
+
+def test_no_prefetch_with_history(monkeypatch):
+    log = []
+    r, _, _ = run([([text("Да.")], "end_turn")], monkeypatch, history="<history>…</history>", parse=counting_parse(log))
+    assert r.prefetch is None and log == []
