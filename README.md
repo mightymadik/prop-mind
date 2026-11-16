@@ -23,12 +23,12 @@ found, so the model cannot invent an apartment.
 ```mermaid
 flowchart LR
     Q["query + history<br/>(assistant turns signed with HMAC)"] --> A["agent<br/>Claude Sonnet 5.5<br/>tool use, ≤ 6 calls"]
-    A -->|search_listings&#40;query&#41;| P["parsing<br/>Claude Haiku 5.5<br/>structured outputs → SearchFilters"]
+    A -->|"search_listings(query)"| P["parsing<br/>Claude Haiku 5.5<br/>structured outputs → SearchFilters"]
     P --> S["hybrid search in Postgres<br/>SQL filters + full-text + pgvector<br/>RRF fusion"]
     S --> R["rerank<br/>Voyage rerank-2.5<br/>top 50 → top 10"]
     R --> A
     A -->|get_listing| DB[(Postgres + pgvector)]
-    A -->|mortgage_payment, price_stats| T["calculator and statistics<br/>program terms from config"]
+    A -->|"mortgage_payment, price_stats"| T["calculator and statistics<br/>program terms from config"]
     A --> U["answer: [n] links are checked<br/>chat page / widget"]
 
     subgraph idx [offline indexing]

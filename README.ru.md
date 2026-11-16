@@ -22,12 +22,12 @@ AI-поиск квартир в новостройках Казахстана: �
 ```mermaid
 flowchart LR
     Q["запрос + история<br/>(реплики ассистента подписаны HMAC)"] --> A["агент<br/>Claude Sonnet 5.5<br/>tool use, ≤ 6 вызовов"]
-    A -->|search_listings&#40;query&#41;| P["разбор<br/>Claude Haiku 5.5<br/>structured outputs → SearchFilters"]
+    A -->|"search_listings(query)"| P["разбор<br/>Claude Haiku 5.5<br/>structured outputs → SearchFilters"]
     P --> S["гибридный поиск в Postgres<br/>SQL-фильтры + полнотекстовый + pgvector<br/>слияние RRF"]
     S --> R["реранк<br/>Voyage rerank-2.5<br/>топ-50 → топ-10"]
     R --> A
     A -->|get_listing| DB[(Postgres + pgvector)]
-    A -->|mortgage_payment, price_stats| T["калькулятор и статистика<br/>условия программ — из конфига"]
+    A -->|"mortgage_payment, price_stats"| T["калькулятор и статистика<br/>условия программ — из конфига"]
     A --> U["ответ: ссылки [n] сверяются<br/>страница чата / виджет"]
 
     subgraph idx [офлайн-индексация]
