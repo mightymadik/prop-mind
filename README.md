@@ -74,6 +74,23 @@ filters, reviewed by hand):
 
 Caveats: 4 of the 11 queries have only 1–2 matching complexes; the data is synthetic.
 
+### Agent (v2): tool use
+
+The chat runs through an agent: the model calls search, complex card, mortgage calculator and price
+statistics tools itself and remembers the dialog (history comes from the client; assistant turns are
+signed by the server). **It was not compared with v1 on search or answer quality** — the switch is a
+product decision ([decisions.md](docs/decisions.md#переход-на-v2-без-проверки-критерия-2026-11-12--2026-11-16), in Russian). Checked:
+
+- **Prompt injection:** 0 of 55 dev attacks succeed (v1: 0 of 43), including 6 attacks on the dialog
+  history: forged, tampered and expired turns are rejected.
+- **Functional cases** (12 dialogs, dev): 12 of 12 — memory, mortgage, statistics, relaxation,
+  clarification; 0 out-of-list references.
+- **Parsing:** filters come from the same parser as v1, applied to the query the agent writes — 100% on dev.
+- **Demo-server latency:** p95 14.5 → 8.2 s (v1: 8.0 s): parsing and search run in parallel with the first
+  model call, and the answer is shorter. ~$0.013 per query.
+- **Limitation:** the final answer arrives whole, not word by word — after tool results the API does not
+  stream the response.
+
 ### v1: resale listings (tag `v0.3.0`)
 
 The numbers below are from the first version, which searched 1,048 resale listings.
@@ -139,8 +156,8 @@ About 100 full answers per day fit into the demo's $2 daily budget.
 ## Key decisions
 
 - **A fixed workflow, not an agent (v1).** Parse → search → rerank → answer always runs in the same
-  order: cheap, predictable and measurable step by step. Tool use comes later (v2) and will be
-  compared on the same evals.
+  order: cheap, predictable and measurable step by step. v2 (an agent with tools) is enabled for
+  dialog memory and tools, without a comparison with v1 on the same evals — see "Agent (v2)".
 - **Search by the semantic part of the query, not the whole text.** Filters already handle price
   and rooms; embedding "2-room under 40M with a quiet courtyard" mostly matches on the numbers.
   Switching to it took vectors from 43% to 54% Recall@10 and hybrid from 58% to 72%
