@@ -7,6 +7,7 @@ answer         — ответ на зафиксированной выдаче: 
     uv run python evals/run_evals.py --repeats 3                                   # parse, dev
     uv run python evals/run_evals.py --split holdout --repeats 3                   # один раз, в конце
     uv run python evals/run_evals.py --agent                                       # разбор агентом (v2)
+    uv run python evals/run_evals.py --layer agent-answer --tag <метка>            # ответ агента: судья, длина
     uv run python evals/run_evals.py --layer search --parsed-from <отчёт parse>
     uv run python evals/run_evals.py --layer answer --cases split:dev --models claude-sonnet-5-5 --judge \
         --parsed-from <отчёт parse>
@@ -549,6 +550,86 @@ def run_answer_judge(args, cfg, settings) -> None:
     print(f"report: {out}")
 
 
+def run_agent_answer(args, cfg, settings) -> None:
+    """Ответ агента (v2) на dev-кейсах: те же проверки судьёй, что у v1 (ослабление, честный ноль, без ложного
+    «подходящих нет»), чужие номера, длина ответа, задержка, цена. Поиск — на кэшах Voyage."""
+    cases = load_cases(args.split)
+    embed_fn, rerank_fn = cached_retrieval_fns(cfg, settings)
+
+    def one(c: dict) -> dict:
+        try:
+            return judged(c)
+        except Exception as e:  # noqa: BLE001 — сбой сети или API: кейс помечается, прогон идёт дальше
+            return {"id": c["id"], "error": f"{e.__class__.__name__}: {e}"}
+
+    def judged(c: dict) -> dict:
+        with track() as ledger, connect() as conn:
+            res = agent.run_agent(conn, c["query"], "", cfg, settings, embed_fn=embed_fn, rerank_fn=rerank_fn)
+        row = {"id": c["id"], "query": c["query"], "relaxed": res.relaxed, "ids": res.source_ids}
+        checks = {}
+        if not res.clarified and not res.refused:
+            for name, check in answer_checks(row, c).items():
+                v = evaluate_check(name, check, c["query"], row, res.text, cfg, settings)
+                checks[name] = {"verdict": v.verdict, "reason": v.reason}
+        return row | {
+            "text": res.raw_text,
+            "clarified": res.clarified,
+            "tool_calls": res.tool_calls,
+            "invalid_refs": res.invalid_refs,
+            "chars": len(res.raw_text),
+            "timings_ms": res.timings_ms,
+            "llm_calls": res.llm_calls,
+            "prefetch": getattr(res, "prefetch", None),
+            "cost_usd": round(ledger.cost_usd(cfg.pricing), 6),
+            "checks": checks,
+        }
+
+    with ThreadPoolExecutor(args.workers) as pool:
+        results = list(pool.map(one, cases))
+    errors = [r for r in results if "error" in r]
+    results = [r for r in results if "error" not in r]
+    totals: dict[str, list[bool]] = {}
+    for r in results:
+        for name, v in r["checks"].items():
+            totals.setdefault(name, []).append(v["verdict"])
+        bad = [k for k, v in r["checks"].items() if not v["verdict"]]
+        print(
+            f"{r['id']}: {'уточнил' if r['clarified'] else ''} {r['chars']} знаков"
+            + (f", не прошло {bad}" if bad else "")
+        )
+    answered = [r for r in results if not r["clarified"]]
+    total = [r["timings_ms"]["answer"] for r in answered]
+    summary = {
+        "cases": len(results),
+        "errors": [r["id"] for r in errors],
+        "clarified": len(results) - len(answered),
+        "checks": {k: {"passed": sum(v), "of": len(v)} for k, v in totals.items()},
+        "answers_with_invalid_refs": sum(bool(r["invalid_refs"]) for r in results),
+        "chars": {"p50": pct([r["chars"] for r in answered], 0.5), "max": max(r["chars"] for r in answered)},
+        "total_ms": {"p50": pct(total, 0.5), "p95": pct(total, 0.95)},
+        "usd_per_query": round(statistics.fmean(r["cost_usd"] for r in results), 6),
+    }
+    prefetch = [r["prefetch"] for r in results if r["prefetch"]]
+    if prefetch:
+        summary["prefetch"] = {
+            "used": sum(p["state"] == "used" for p in prefetch),
+            "of": len(prefetch),
+            "unused_usd": round(sum(p.get("usd", 0) for p in prefetch if p["state"] != "used"), 6),
+        }
+    now = datetime.now(UTC)
+    out = ROOT / "results" / f"{now:%Y%m%dT%H%M%SZ}_agent-answer_{args.split}{'_' + args.tag if args.tag else ''}.json"
+    report = {
+        "layer": "agent-answer",
+        "date": now.isoformat(timespec="seconds"),
+        "model": cfg.models["agent"],
+        "summary": summary,
+        "results": results,
+    }
+    out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(json.dumps(summary, ensure_ascii=False))
+    print(f"report: {out.relative_to(ROOT.parent)}")
+
+
 def run_answer_review(args) -> None:
     """Слепой файл оценки из готового отчёта answer — без повторных вызовов моделей."""
     report = json.loads(args.report.read_text(encoding="utf-8"))
@@ -573,7 +654,7 @@ def main() -> None:
     ap.add_argument(
         "--layer",
         default="parse",
-        choices=["parse", "search", "answer", "answer-judge", "answer-review", "answer-reveal"],
+        choices=["parse", "search", "answer", "answer-judge", "answer-review", "answer-reveal", "agent-answer"],
     )
     ap.add_argument("--report", type=Path, help="answer-review: отчёт answer, из которого собрать слепой файл")
     ap.add_argument("--review", type=Path, help="answer-reveal: заполненный файл оценки")
@@ -596,6 +677,8 @@ def main() -> None:
         run_search(args, cfg, settings)
     elif args.layer == "answer":
         run_answer(args, cfg, settings)
+    elif args.layer == "agent-answer":
+        run_agent_answer(args, cfg, settings)
     elif args.layer == "answer-judge":
         run_answer_judge(args, cfg, settings)
     elif args.layer == "answer-review":
