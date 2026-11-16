@@ -70,6 +70,18 @@ def test_agent_failure_is_502_or_error_event(monkeypatch):
     assert "event: error" in r.text and "RuntimeError" in r.text
 
 
+@pytest.mark.parametrize(("mode", "enabled", "expected"), [("v2", True, "v2"), ("v1", True, "v1"), ("v2", False, "v1")])
+def test_chat_config_mode(monkeypatch, mode, enabled, expected):
+    c = main.cfg.model_copy(
+        update={
+            "chat": main.cfg.chat.model_copy(update={"mode": mode}),
+            "agent": main.cfg.agent.model_copy(update={"enabled": enabled}),
+        }
+    )
+    monkeypatch.setattr(main, "cfg", c)
+    assert client.get("/chat/config").json() == {"mode": expected}  # агент выключен — страница идёт в v1
+
+
 def test_v1_search_does_not_check_agent_budget(monkeypatch):
     monkeypatch.setattr(main, "agent_budget_left", lambda conn, cfg: pytest.fail("agent budget checked"))
     monkeypatch.setattr(main, "run_search", lambda q, cfg, s, on_event=None: {"answer": "ok"})

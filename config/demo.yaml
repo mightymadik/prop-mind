@@ -113,6 +113,9 @@ mortgage:                        # калькулятор агента (6.4); к
     as_of: "2026-11-12"
     source: пример, не оферта
 
+chat:
+  mode: v2                       # страница чата: v2 — агент (/agent), v1 — workflow (/search), откат без правки кода
+
 agent:
   enabled: true                  # POST /agent (v2); в UI — за переключателем, по умолчанию v1
   daily_budget_usd: 1            # часть общего limits.daily_budget_usd, которую может потратить агент

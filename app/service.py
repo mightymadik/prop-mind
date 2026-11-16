@@ -230,7 +230,8 @@ def run_agent_search(
             def relay(name: str, data: dict) -> None:
                 if name == "filters":
                     f = data["filters"]
-                    emit("filters", {"filters": f.model_dump(exclude_defaults=True), "chips": catalog_chips(f, cfg)})
+                    payload["chips"] = catalog_chips(f, cfg)  # для JSON-ответа (?stream=0) — последнего поиска
+                    emit("filters", {"filters": f.model_dump(exclude_defaults=True), "chips": payload["chips"]})
                 elif name == "results":
                     payload["results"] = [complex_card(h, cfg) for h in data["hits"]]
                     emit("results", {"relaxed": data["relaxed"], "results": payload["results"]})

@@ -152,6 +152,12 @@ def chat_page(site_key: str | None = None) -> FileResponse:
     return FileResponse(index, headers={"Content-Security-Policy": page_csp(frame_ancestors(cfg, site_key))})
 
 
+@app.get("/chat/config")
+def chat_config() -> dict:
+    """Режим страницы чата (chat.mode): страница спрашивает его при загрузке."""
+    return {"mode": cfg.chat_mode()}
+
+
 @app.get("/widget.js")
 def widget() -> FileResponse:
     return FileResponse(

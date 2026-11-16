@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, Field
@@ -96,6 +97,10 @@ class AgentConfig(BaseModel):
     history_signed_ttl_hours: int = 24  # подпись старше — реплика считается неподписанной
 
 
+class ChatConfig(BaseModel):
+    mode: Literal["v1", "v2"] = "v1"  # чем отвечает страница чата: v1 — /search, v2 — агент /agent
+
+
 class CatalogConfig(BaseModel):
     """Новостройки: ЖК → квартиры. Словари — ключ → как пишем в тексте (search_text, промпты, интерфейс)."""
 
@@ -130,6 +135,11 @@ class AppConfig(BaseModel):
     moderation: ModerationConfig = ModerationConfig()
     mortgage: dict[str, MortgageProgram] = {}  # программа → условия (калькулятор ипотеки агента)
     agent: AgentConfig = AgentConfig()
+    chat: ChatConfig = ChatConfig()
+
+    def chat_mode(self) -> str:
+        """Режим страницы чата: v2 — только если агент включён (иначе /agent отвечает 404)."""
+        return "v2" if self.chat.mode == "v2" and self.agent.enabled else "v1"
 
 
 def load_config(path: str | Path) -> AppConfig:

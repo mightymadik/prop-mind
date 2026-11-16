@@ -238,7 +238,7 @@ def test_agent_events_log_row_and_signed_turn(monkeypatch):
         "а с ипотекой? звоните +7 701 123 45 67", history, CFG, settings, lambda n, d: events.append((n, d))
     )
     assert [n for n, _ in events] == ["tool", "filters", "results", "delta", "answer", "done"]
-    assert dict(events)["filters"]["chips"] == ["Алматы", "2 комн."]
+    assert dict(events)["filters"]["chips"] == ["Алматы", "2 комн."] == out["chips"]  # и в JSON-ответе
     assert dict(events)["tool"] == {"label": "ищу варианты…"}
     assert seen["block"] == "<history>…</history>" and out["results"][0]["source_id"] == "cx-001"
     turn = ChatTurn.model_validate(out["turn"])
