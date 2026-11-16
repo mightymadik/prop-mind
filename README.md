@@ -223,3 +223,7 @@ db/             schema and migrations
 deploy/oracle/  server compose file and Caddy config
 docs/           DESIGN.md (plan), decisions.md (what broke and why, numbers before/after; in Russian)
 ```
+
+## License
+
+[MIT](LICENSE). The data in `data/` is synthetic.
