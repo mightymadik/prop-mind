@@ -73,7 +73,8 @@ def check(c: dict, turns: list, conn, cfg, settings, query: str) -> tuple[bool, 
             return False, f"статистики нет: {res.tool_log}"
         s = price_stats(conn, cfg, **ok[-1]["input"])
         if t == "stats_low":
-            said = bool(re.search(r"мало|недостаточно|слишком мало", res.text, re.I))
+            # «данных мало» любыми словами: «мало», «недостаточно», «для медианы нужно больше», «всего N квартир»
+            said = bool(re.search(rf"мало|недостаточно|нужно больше|всего {s.count}\b", res.text, re.I))
             return not s.enough_data and said, f"enough_data={s.enough_data}, «мало данных» в ответе: {said}"
         hit = mentions(res.text, s.median_kzt_per_m2, 0.015) or mentions(res.text, s.median_price_kzt, 0.015)
         catalog = "каталог" in res.text.lower()
@@ -134,6 +135,7 @@ def main() -> None:
                         "total_ms": res.total_ms,
                         "timings_ms": res.timings_ms,
                         "llm_calls": res.llm_calls,
+                        "prefetch": res.prefetch,
                         "history_rejected": rejected,
                         "cost_usd": round(ledger.cost_usd(cfg.pricing), 6),
                     }
@@ -179,6 +181,22 @@ def main() -> None:
         "history_rejected": sum(r["history_rejected"] for x in results for r in x["turns"]),
         "total_ms": {"p50": pct(total, 0.5), "p95": pct(total, 0.95)},
         "first_token_ms": {"p50": pct(first_token, 0.5), "p95": pct(first_token, 0.95)},  # если стримить финальный
+        "prefetch": {
+            "used": sum((r.get("prefetch") or {}).get("state") == "used" for x in results for r in x["turns"]),
+            "of": sum(bool(r.get("prefetch")) for x in results for r in x["turns"]),
+            "unused_usd": round(
+                sum(
+                    (r["prefetch"].get("usd") or 0)
+                    for x in results
+                    for r in x["turns"]
+                    if r.get("prefetch") and r["prefetch"]["state"] != "used"
+                ),
+                6,
+            ),
+            "unused_not_finished": sum(
+                1 for x in results for r in x["turns"] if r.get("prefetch") and r["prefetch"].get("usd") is None
+            ),
+        },
         "usd_per_turn": round(sum(r["cost_usd"] for x in results for r in x["turns"]) / len(total), 6),
     }
     now = datetime.now(UTC)

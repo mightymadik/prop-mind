@@ -1,0 +1,1125 @@
+{
+  "layer": "agent_cases",
+  "date": "2026-11-12T12:22:54+00:00",
+  "model": "claude-sonnet-5-5",
+  "summary": {
+    "passed": 11,
+    "of": 12,
+    "by_tag": {
+      "clarify": {
+        "passed": 2,
+        "of": 2
+      },
+      "memory": {
+        "passed": 4,
+        "of": 4
+      },
+      "mortgage": {
+        "passed": 4,
+        "of": 4
+      },
+      "relax": {
+        "passed": 1,
+        "of": 1
+      },
+      "stats": {
+        "passed": 1,
+        "of": 2
+      }
+    },
+    "turns": 16,
+    "invalid_refs": 0,
+    "history_rejected": 0,
+    "total_ms": {
+      "p50": 5898,
+      "p95": 9453
+    },
+    "first_token_ms": {
+      "p50": 5893,
+      "p95": 9447
+    },
+    "usd_per_turn": 0.009789
+  },
+  "results": [
+    {
+      "id": "a01",
+      "tags": [
+        "memory"
+      ],
+      "passed": true,
+      "checks": [
+        {
+          "check": "query_verbatim",
+          "turn": 1,
+          "ok": true,
+          "why": "двушка в Алматы до 45 млн"
+        },
+        {
+          "check": "filters",
+          "turn": 2,
+          "ok": true,
+          "why": "ok"
+        }
+      ],
+      "turns": [
+        {
+          "query": "двушка в Алматы до 45 млн",
+          "text": "Нашлось много вариантов, все двухкомнатные квартиры укладываются в бюджет до 45 млн ₸. Вот три для начала:\n\n1. [8] Самый доступный по цене в подборке. Двор без машин, рядом школа и парк, есть рассрочка и госпрограммы. Сдача только в 2029 году.\n2. [1] Дом уже сдан, рядом метро и школа. Можно взять в ипотеку или по госпрограмме.\n3. [3] Дом сдан, в ЖК есть детский сад, двор закрыт для машин. Подходит для семьи с детьми.\n\nЧтобы сузить выбор, напишите, что для вас важнее: готовый дом или сдача позже, район, метро, детский сад и школа рядом. Могу также посчитать ежемесячный платёж по ипотеке.",
+          "tool_log": [
+            {
+              "name": "search_listings",
+              "input": {
+                "query": "двушка в Алматы до 45 млн"
+              },
+              "error": false
+            }
+          ],
+          "source_ids": [
+            "cx-066",
+            "cx-024",
+            "cx-068",
+            "cx-012",
+            "cx-052",
+            "cx-028",
+            "cx-050",
+            "cx-063",
+            "cx-048",
+            "cx-053"
+          ],
+          "invalid_refs": [],
+          "rounds": 2,
+          "total_ms": 5027,
+          "timings_ms": {
+            "llm1": 1615,
+            "prefetch_wait": 225,
+            "parse": 1798,
+            "embed": 29,
+            "search": 10,
+            "rerank": 0,
+            "llm2": 3185,
+            "first_token": 5024,
+            "answer": 5027
+          },
+          "llm_calls": [
+            {
+              "ms": 1615,
+              "input_tokens": 4,
+              "output_tokens": 71,
+              "cache_write": 85,
+              "cache_read": 3163,
+              "stop_reason": "tool_use"
+            },
+            {
+              "ms": 3185,
+              "input_tokens": 2,
+              "output_tokens": 284,
+              "cache_write": 3254,
+              "cache_read": 3248,
+              "stop_reason": "end_turn"
+            }
+          ],
+          "history_rejected": 0,
+          "cost_usd": 0.013966
+        },
+        {
+          "query": "а то же самое в Астане?",
+          "text": "В Астане двушек до 45 млн ₸ тоже много, все найденные варианты укладываются в бюджет. Вот три, которые выделяются:\n\n- [5] ЖК Ясень: дом сдан, самые низкие цены в сданных домах (от 29,2 млн ₸), двор без машин, рядом школа и парк.\n- [4] ЖК Nuvo: дом сдан, детский сад в ЖК, рядом школа и парк, подземный паркинг.\n- [2] ЖК Берекелі: дом сдан, двор закрыт для машин, рядом школа, подходит и для госпрограмм.\n\nЧтобы сузить выбор, скажите, важнее ли готовый дом или низкая цена со сдачей позже (например, [6] от 27,1 млн ₸), а также район и детский сад. Могу посчитать ежемесячный платёж по ипотеке.",
+          "tool_log": [
+            {
+              "name": "search_listings",
+              "input": {
+                "query": "двушка в Астане до 45 млн"
+              },
+              "error": false
+            }
+          ],
+          "source_ids": [
+            "cx-059",
+            "cx-060",
+            "cx-065",
+            "cx-070",
+            "cx-014",
+            "cx-027",
+            "cx-041",
+            "cx-058",
+            "cx-042",
+            "cx-033"
+          ],
+          "invalid_refs": [],
+          "rounds": 2,
+          "total_ms": 9311,
+          "timings_ms": {
+            "llm1": 2877,
+            "parse": 2433,
+            "embed": 14,
+            "search": 3,
+            "rerank": 0,
+            "llm2": 3979,
+            "first_token": 9297,
+            "answer": 9311
+          },
+          "llm_calls": [
+            {
+              "ms": 2877,
+              "input_tokens": 4,
+              "output_tokens": 113,
+              "cache_write": 723,
+              "cache_read": 3163,
+              "stop_reason": "tool_use"
+            },
+            {
+              "ms": 3979,
+              "input_tokens": 2,
+              "output_tokens": 301,
+              "cache_write": 3166,
+              "cache_read": 3886,
+              "stop_reason": "end_turn"
+            }
+          ],
+          "history_rejected": 0,
+          "cost_usd": 0.016174
+        }
+      ]
+    },
+    {
+      "id": "a02",
+      "tags": [
+        "memory"
+      ],
+      "passed": true,
+      "checks": [
+        {
+          "check": "query_verbatim",
+          "turn": 1,
+          "ok": true,
+          "why": "трёшка в Бостандыкском районе"
+        },
+        {
+          "check": "filters",
+          "turn": 2,
+          "ok": true,
+          "why": "ok"
+        }
+      ],
+      "turns": [
+        {
+          "query": "трёшка в Бостандыкском районе",
+          "text": "Нашлось 8 ЖК с трёшками в Бостандыкском районе. Вот три, которые я бы посмотрел в первую очередь:\n\n1. [5] ЖК Ерменсай: комфорт-класс с одними из самых низких цен на трёшки, детский сад в самом комплексе, подземный паркинг, есть рассрочка и госпрограммы.\n2. [2] ЖК Лесная Поляна: комфорт-класс, закрытый двор без машин, рядом школа, подходит семье с детьми. Сдача только в 4 кв. 2029, есть рассрочка и госпрограммы.\n3. [1] ЖК Rondo: дом уже сдан, спокойный квартал на зелёной улице, покупка через ипотеку.\n\nЕсли вам нужен бизнес-класс с метро рядом, посмотрите [6] и [8]. Они дороже и у них больше всего свободных трёшек.\n\nЧтобы сузить выбор, подскажите, какой у вас бюджет, нужен ли готовый дом или подойдёт строящийся, и как вы планируете платить: ипотека, рассрочка или госпрограмма.",
+          "tool_log": [
+            {
+              "name": "search_listings",
+              "input": {
+                "query": "трёшка в Бостандыкском районе"
+              },
+              "error": false
+            }
+          ],
+          "source_ids": [
+            "cx-046",
+            "cx-026",
+            "cx-047",
+            "cx-023",
+            "cx-007",
+            "cx-006",
+            "cx-044",
+            "cx-030"
+          ],
+          "invalid_refs": [],
+          "rounds": 2,
+          "total_ms": 6425,
+          "timings_ms": {
+            "llm1": 1606,
+            "prefetch_wait": 899,
+            "parse": 2464,
+            "embed": 33,
+            "search": 5,
+            "rerank": 0,
+            "llm2": 3918,
+            "first_token": 6411,
+            "answer": 6425
+          },
+          "llm_calls": [
+            {
+              "ms": 1606,
+              "input_tokens": 4,
+              "output_tokens": 78,
+              "cache_write": 85,
+              "cache_read": 3163,
+              "stop_reason": "tool_use"
+            },
+            {
+              "ms": 3918,
+              "input_tokens": 2,
+              "output_tokens": 391,
+              "cache_write": 2557,
+              "cache_read": 3248,
+              "stop_reason": "end_turn"
+            }
+          ],
+          "history_rejected": 0,
+          "cost_usd": 0.013337
+        },
+        {
+          "query": "а подешевле, до 60 млн?",
+          "text": "Полностью подходящих нет: в Бостандыкском районе трёшек до 60 млн поиск не нашёл, поэтому я ослабил район и показываю другие районы Алматы.\n\nБлижайшие варианты:\n- [2] ЖК Миндаль: дом уже сдан, рядом метро и школа (Жетысуский район); цены на трёшки доходят до 59,9 млн, то есть почти впритык к бюджету.\n- [3] ЖК Теректі: детский сад в ЖК, закрытый двор без машин, подземный паркинг, подходит семье с детьми (Наурызбайский район).\n- [6] ЖК Новый Ритм: рядом школа и парк, двор без машин, есть рассрочка и госпрограммы (Турксибский район).\n\nЧто можно изменить:\n- Если Бостандыкский район принципиален, можно поднять бюджет выше 60 млн, и я поищу там снова.\n- Можно оставить бюджет и расширить район на соседние: Ауэзовский, Алмалинский.",
+          "tool_log": [
+            {
+              "name": "search_listings",
+              "input": {
+                "query": "трёшка в Бостандыкском районе до 60 млн"
+              },
+              "error": false
+            }
+          ],
+          "source_ids": [
+            "cx-048",
+            "cx-066",
+            "cx-012",
+            "cx-028",
+            "cx-037",
+            "cx-063",
+            "cx-050",
+            "cx-040",
+            "cx-053",
+            "cx-001"
+          ],
+          "invalid_refs": [],
+          "rounds": 2,
+          "total_ms": 9453,
+          "timings_ms": {
+            "llm1": 2330,
+            "parse": 2091,
+            "embed": 570,
+            "search": 10,
+            "rerank": 533,
+            "llm2": 3910,
+            "first_token": 9447,
+            "answer": 9453
+          },
+          "llm_calls": [
+            {
+              "ms": 2330,
+              "input_tokens": 4,
+              "output_tokens": 101,
+              "cache_write": 702,
+              "cache_read": 3163,
+              "stop_reason": "tool_use"
+            },
+            {
+              "ms": 3910,
+              "input_tokens": 2,
+              "output_tokens": 353,
+              "cache_write": 3308,
+              "cache_read": 3865,
+              "stop_reason": "end_turn"
+            }
+          ],
+          "history_rejected": 0,
+          "cost_usd": 0.016947
+        }
+      ]
+    },
+    {
+      "id": "a03",
+      "tags": [
+        "memory"
+      ],
+      "passed": true,
+      "checks": [
+        {
+          "check": "query_verbatim",
+          "turn": 1,
+          "ok": true,
+          "why": "двушка в Есильском районе до 50 млн"
+        },
+        {
+          "check": "get_listing_of",
+          "turn": 2,
+          "ok": true,
+          "why": "нужен ['cx-039'], вызваны ['cx-039']"
+        }
+      ],
+      "turns": [
+        {
+          "query": "двушка в Есильском районе до 50 млн",
+          "text": "Нашлось четыре ЖК, все в Есильском районе, с двухкомнатными квартирами до 50 млн ₸. Фильтры поиск не ослаблял. Ниже три лучших.\n\n1. [4] Самые дешёвые двушки: от 40,1 млн ₸. Рядом набережная и парк, детский сад в самом ЖК, сдача раньше других строящихся — во 2 квартале 2027.\n2. [2] Дом уже сдан, поэтому можно заехать сразу. Детский сад в ЖК и парк рядом, квартир немного.\n3. [3] Подходит, если планируете государственную программу. Школа рядом, детский сад будет на территории, сдача в 2029.\n\nЕщё есть [1]: он тоже подходит по цене, но сдача в 2029.\n\nЕсли нужно, посчитаю ежемесячный платёж по ипотеке или рассрочке.",
+          "tool_log": [
+            {
+              "name": "search_listings",
+              "input": {
+                "query": "двушка в Есильском районе до 50 млн"
+              },
+              "error": false
+            }
+          ],
+          "source_ids": [
+            "cx-041",
+            "cx-039",
+            "cx-065",
+            "cx-017"
+          ],
+          "invalid_refs": [],
+          "rounds": 2,
+          "total_ms": 5993,
+          "timings_ms": {
+            "llm1": 1672,
+            "prefetch_wait": 772,
+            "parse": 2406,
+            "embed": 30,
+            "search": 5,
+            "rerank": 0,
+            "llm2": 3546,
+            "first_token": 5984,
+            "answer": 5993
+          },
+          "llm_calls": [
+            {
+              "ms": 1672,
+              "input_tokens": 4,
+              "output_tokens": 93,
+              "cache_write": 87,
+              "cache_read": 3163,
+              "stop_reason": "tool_use"
+            },
+            {
+              "ms": 3546,
+              "input_tokens": 2,
+              "output_tokens": 308,
+              "cache_write": 1397,
+              "cache_read": 3250,
+              "stop_reason": "end_turn"
+            }
+          ],
+          "history_rejected": 0,
+          "cost_usd": 0.009795
+        },
+        {
+          "query": "а что со вторым вариантом? сколько там свободных квартир?",
+          "text": "В ЖК Marin [1] сейчас 20 свободных квартир:\n- 1-комнатных: 7\n- 2-комнатных: 7\n- 3-комнатных: 5\n- 4-комнатных: 1\n\nДвухкомнатные стоят от 42,4 до 56,1 млн ₸, так что не все они укладываются в ваши 50 млн. Дом уже сдан. Если интересно, посчитаю ипотеку или рассрочку по конкретной квартире.",
+          "tool_log": [
+            {
+              "name": "get_listing",
+              "input": {
+                "source_id": "cx-039"
+              },
+              "error": false
+            }
+          ],
+          "source_ids": [
+            "cx-039"
+          ],
+          "invalid_refs": [],
+          "rounds": 2,
+          "total_ms": 6301,
+          "timings_ms": {
+            "llm1": 3781,
+            "llm2": 2511,
+            "first_token": 6297,
+            "answer": 6301
+          },
+          "llm_calls": [
+            {
+              "ms": 3781,
+              "input_tokens": 4,
+              "output_tokens": 83,
+              "cache_write": 625,
+              "cache_read": 3163,
+              "stop_reason": "tool_use"
+            },
+            {
+              "ms": 2511,
+              "input_tokens": 2,
+              "output_tokens": 164,
+              "cache_write": 501,
+              "cache_read": 3788,
+              "stop_reason": "end_turn"
+            }
+          ],
+          "history_rejected": 0,
+          "cost_usd": 0.006687
+        }
+      ]
+    },
+    {
+      "id": "a04",
+      "tags": [
+        "mortgage"
+      ],
+      "passed": true,
+      "checks": [
+        {
+          "check": "mortgage",
+          "turn": 1,
+          "ok": true,
+          "why": "платёж 453792, вход {'program': 'mortgage', 'price_kzt': 35000000, 'down_payment_kzt': 7000000, 'years': 20}"
+        }
+      ],
+      "turns": [
+        {
+          "query": "посчитай рыночную ипотеку: квартира 35 млн, взнос 7 млн, на 20 лет",
+          "text": "Расчёт по рыночной ипотеке на 12.11.2026:\n\n-   Стоимость квартиры: 35 000 000 ₸\n-   Первоначальный взнос: 7 000 000 ₸\n-   Сумма кредита: 28 000 000 ₸\n-   Ставка: 19,0% годовых\n-   Срок: 20 лет\n-   **Ежемесячный платёж: 453 792 ₸**\n-   Всего выплат за срок: 108 910 022 ₸\n-   Переплата: 80 910 022 ₸\n\nУсловия приведены как пример, это не оферта банка.",
+          "tool_log": [
+            {
+              "name": "mortgage_payment",
+              "input": {
+                "program": "mortgage",
+                "price_kzt": 35000000,
+                "down_payment_kzt": 7000000,
+                "years": 20
+              },
+              "error": false
+            }
+          ],
+          "source_ids": [],
+          "invalid_refs": [],
+          "rounds": 2,
+          "total_ms": 4210,
+          "timings_ms": {
+            "llm1": 2104,
+            "llm2": 2105,
+            "first_token": 4205,
+            "answer": 4210
+          },
+          "llm_calls": [
+            {
+              "ms": 2104,
+              "input_tokens": 4,
+              "output_tokens": 156,
+              "cache_write": 109,
+              "cache_read": 3163,
+              "stop_reason": "tool_use"
+            },
+            {
+              "ms": 2105,
+              "input_tokens": 2,
+              "output_tokens": 205,
+              "cache_write": 310,
+              "cache_read": 3272,
+              "stop_reason": "end_turn"
+            }
+          ],
+          "history_rejected": 0,
+          "cost_usd": 0.00698
+        }
+      ]
+    },
+    {
+      "id": "a05",
+      "tags": [
+        "mortgage",
+        "memory"
+      ],
+      "passed": true,
+      "checks": [
+        {
+          "check": "query_verbatim",
+          "turn": 1,
+          "ok": true,
+          "why": "однушка в Астане до 30 млн"
+        },
+        {
+          "check": "mortgage",
+          "turn": 2,
+          "ok": true,
+          "why": "платёж 271953, вход {'program': 'mortgage', 'price_kzt': 20200000, 'down_payment_kzt': 4040000, 'years': 15}"
+        }
+      ],
+      "turns": [
+        {
+          "query": "однушка в Астане до 30 млн",
+          "text": "Нашлось много однокомнатных квартир до 30 млн ₸. Три ЖК, где самая низкая цена:\n\n1. [5] ЖК Тумар, Алматинский р-н: самые низкие цены (от 20,2 млн ₸), есть рассрочка от застройщика. Сдача только в 1 кв. 2029.\n2. [6] ЖК Ясень, Алматинский р-н: дом уже сдан, цены от 22,1 млн ₸, двор закрыт для машин, рядом парк и школа. Свободных квартир всего две.\n3. [4] ЖК Тополиный, Алматинский р-н: дом сдан, от 22,6 млн ₸, есть подземный паркинг и парк рядом.\n\nЕсли важны другой район, срок сдачи или способ покупки (ипотека, госпрограмма, рассрочка), скажите, и я сужу подборку.",
+          "tool_log": [
+            {
+              "name": "search_listings",
+              "input": {
+                "query": "однушка в Астане до 30 млн"
+              },
+              "error": false
+            }
+          ],
+          "source_ids": [
+            "cx-059",
+            "cx-070",
+            "cx-060",
+            "cx-058",
+            "cx-027",
+            "cx-014",
+            "cx-065",
+            "cx-041",
+            "cx-033",
+            "cx-015"
+          ],
+          "invalid_refs": [],
+          "rounds": 2,
+          "total_ms": 5470,
+          "timings_ms": {
+            "llm1": 1660,
+            "prefetch_wait": 788,
+            "parse": 2420,
+            "embed": 22,
+            "search": 4,
+            "rerank": 0,
+            "llm2": 3019,
+            "first_token": 5463,
+            "answer": 5470
+          },
+          "llm_calls": [
+            {
+              "ms": 1660,
+              "input_tokens": 4,
+              "output_tokens": 69,
+              "cache_write": 84,
+              "cache_read": 3163,
+              "stop_reason": "tool_use"
+            },
+            {
+              "ms": 3019,
+              "input_tokens": 2,
+              "output_tokens": 304,
+              "cache_write": 3118,
+              "cache_read": 3247,
+              "stop_reason": "end_turn"
+            }
+          ],
+          "history_rejected": 0,
+          "cost_usd": 0.013896
+        },
+        {
+          "query": "посчитай рыночную ипотеку на самую дешёвую квартиру из первого варианта: взнос 20%, 15 лет",
+          "text": "Считал по ЖК Тумар [1]: в прошлом ответе он назван первым, хотя в служебном списке первым стоял другой ЖК. Если вам нужен ЖК Prisma [2], где однушки от 23,5 млн ₸, пересчитаю.\n\nРыночная ипотека на самую дешёвую однушку в ЖК Тумар:\n- Цена: 20 200 000 ₸\n- Взнос 20%: 4 040 000 ₸\n- Кредит: 16 160 000 ₸ на 15 лет\n- Ставка: 19,0%\n- Платёж в месяц: 271 953 ₸\n- Всего выплат: 48 951 498 ₸\n- Переплата: 32 791 498 ₸\n\nУсловия приведены как пример, а не оферта, по состоянию на 12.11.2026.",
+          "tool_log": [
+            {
+              "name": "get_listing",
+              "input": {
+                "source_id": "cx-027"
+              },
+              "error": false
+            },
+            {
+              "name": "get_listing",
+              "input": {
+                "source_id": "cx-059"
+              },
+              "error": false
+            },
+            {
+              "name": "mortgage_payment",
+              "input": {
+                "program": "mortgage",
+                "price_kzt": 20200000,
+                "down_payment_kzt": 4040000,
+                "years": 15
+              },
+              "error": false
+            }
+          ],
+          "source_ids": [
+            "cx-027",
+            "cx-059"
+          ],
+          "invalid_refs": [],
+          "rounds": 3,
+          "total_ms": 7613,
+          "timings_ms": {
+            "llm1": 2312,
+            "llm2": 2338,
+            "llm3": 2949,
+            "first_token": 7597,
+            "answer": 7613
+          },
+          "llm_calls": [
+            {
+              "ms": 2312,
+              "input_tokens": 4,
+              "output_tokens": 187,
+              "cache_write": 763,
+              "cache_read": 3163,
+              "stop_reason": "tool_use"
+            },
+            {
+              "ms": 2338,
+              "input_tokens": 2,
+              "output_tokens": 228,
+              "cache_write": 1025,
+              "cache_read": 3926,
+              "stop_reason": "tool_use"
+            },
+            {
+              "ms": 2949,
+              "input_tokens": 2,
+              "output_tokens": 283,
+              "cache_write": 380,
+              "cache_read": 4951,
+              "stop_reason": "end_turn"
+            }
+          ],
+          "history_rejected": 0,
+          "cost_usd": 0.014824
+        }
+      ]
+    },
+    {
+      "id": "a06",
+      "tags": [
+        "mortgage"
+      ],
+      "passed": true,
+      "checks": [
+        {
+          "check": "mortgage_error",
+          "turn": 1,
+          "ok": true,
+          "why": "ошибка инструмента: True, причина в ответе: True"
+        }
+      ],
+      "turns": [
+        {
+          "query": "рыночная ипотека на квартиру за 40 млн, взнос 2 млн, 20 лет — какой платёж?",
+          "text": "По рыночной ипотеке посчитать не получилось: взнос должен быть не меньше 20% цены, то есть от 8 000 000 ₸ для квартиры за 40 000 000 ₸. Ваши 2 000 000 ₸ — это 5%.\n\nМогу посчитать платёж со взносом 8 000 000 ₸ на те же 20 лет, или посмотреть другие программы (господдержку или рассрочку), где требования к взносу могут быть мягче. Какой вариант считать?",
+          "tool_log": [
+            {
+              "name": "mortgage_payment",
+              "input": {
+                "program": "mortgage",
+                "price_kzt": 40000000,
+                "down_payment_kzt": 2000000,
+                "years": 20
+              },
+              "error": true
+            }
+          ],
+          "source_ids": [],
+          "invalid_refs": [],
+          "rounds": 2,
+          "total_ms": 4350,
+          "timings_ms": {
+            "llm1": 2047,
+            "llm2": 2302,
+            "first_token": 4345,
+            "answer": 4350
+          },
+          "llm_calls": [
+            {
+              "ms": 2047,
+              "input_tokens": 4,
+              "output_tokens": 170,
+              "cache_write": 112,
+              "cache_read": 3163,
+              "stop_reason": "tool_use"
+            },
+            {
+              "ms": 2302,
+              "input_tokens": 2,
+              "output_tokens": 172,
+              "cache_write": 213,
+              "cache_read": 3275,
+              "stop_reason": "end_turn"
+            }
+          ],
+          "history_rejected": 0,
+          "cost_usd": 0.006521
+        }
+      ]
+    },
+    {
+      "id": "a07",
+      "tags": [
+        "mortgage"
+      ],
+      "passed": true,
+      "checks": [
+        {
+          "check": "mortgage",
+          "turn": 1,
+          "ok": true,
+          "why": "платёж 875000, вход {'program': 'installment', 'price_kzt': 30000000, 'down_payment_kzt': 9000000, 'years': 2}"
+        }
+      ],
+      "turns": [
+        {
+          "query": "рассрочка от застройщика: квартира 30 млн, взнос 9 млн, на 2 года — сколько в месяц?",
+          "text": "Рассрочка от застройщика на 2 года (расчёт на 12.11.2026):\n\n-   Цена квартиры: 30 000 000 ₸\n-   Первоначальный взнос: 9 000 000 ₸\n-   Остаток к выплате: 21 000 000 ₸\n-   Ставка: 0 %\n-   **Платёж в месяц: 875 000 ₸**\n-   Всего выплат по рассрочке: 21 000 000 ₸, переплаты нет (0 ₸)\n\nЭто пример, а не оферта. Реальные условия зависят от застройщика и конкретного ЖК.",
+          "tool_log": [
+            {
+              "name": "mortgage_payment",
+              "input": {
+                "program": "installment",
+                "price_kzt": 30000000,
+                "down_payment_kzt": 9000000,
+                "years": 2
+              },
+              "error": false
+            }
+          ],
+          "source_ids": [],
+          "invalid_refs": [],
+          "rounds": 2,
+          "total_ms": 4366,
+          "timings_ms": {
+            "llm1": 2004,
+            "llm2": 2360,
+            "first_token": 4361,
+            "answer": 4366
+          },
+          "llm_calls": [
+            {
+              "ms": 2004,
+              "input_tokens": 4,
+              "output_tokens": 178,
+              "cache_write": 114,
+              "cache_read": 3163,
+              "stop_reason": "tool_use"
+            },
+            {
+              "ms": 2360,
+              "input_tokens": 2,
+              "output_tokens": 208,
+              "cache_write": 330,
+              "cache_read": 3277,
+              "stop_reason": "end_turn"
+            }
+          ],
+          "history_rejected": 0,
+          "cost_usd": 0.007281
+        }
+      ]
+    },
+    {
+      "id": "a08",
+      "tags": [
+        "stats"
+      ],
+      "passed": true,
+      "checks": [
+        {
+          "check": "stats",
+          "turn": 1,
+          "ok": true,
+          "why": "медиана в ответе: True, «каталог»: True"
+        }
+      ],
+      "turns": [
+        {
+          "query": "какая сейчас средняя цена за квадратный метр в Медеуском районе?",
+          "text": "В Медеуском районе Алматы медианная цена за м² равна 1 104 107 ₸. Это статистика по свободным квартирам нашего каталога, а не по всему рынку.\n\n- Основной диапазон цен за м² (от 25-го до 75-го процентиля) — от 1 013 066 ₸ до 1 380 882 ₸.\n- Медианная цена квартиры — 79 500 000 ₸.\n- В расчёте участвует 156 квартир, этого достаточно для статистики.\n\nМогу посчитать отдельно по числу комнат или по классу жилья (комфорт или бизнес).",
+          "tool_log": [
+            {
+              "name": "price_stats",
+              "input": {
+                "city": "Алматы",
+                "district": "Медеуский",
+                "rooms": null,
+                "housing_class": null
+              },
+              "error": false
+            }
+          ],
+          "source_ids": [],
+          "invalid_refs": [],
+          "rounds": 2,
+          "total_ms": 5898,
+          "timings_ms": {
+            "llm1": 2786,
+            "llm2": 3104,
+            "first_token": 5893,
+            "answer": 5898
+          },
+          "llm_calls": [
+            {
+              "ms": 2786,
+              "input_tokens": 4,
+              "output_tokens": 155,
+              "cache_write": 98,
+              "cache_read": 3163,
+              "stop_reason": "tool_use"
+            },
+            {
+              "ms": 3104,
+              "input_tokens": 2,
+              "output_tokens": 207,
+              "cache_write": 304,
+              "cache_read": 3261,
+              "stop_reason": "end_turn"
+            }
+          ],
+          "history_rejected": 0,
+          "cost_usd": 0.006885
+        }
+      ]
+    },
+    {
+      "id": "a09",
+      "tags": [
+        "stats"
+      ],
+      "passed": false,
+      "checks": [
+        {
+          "check": "stats_low",
+          "turn": 1,
+          "ok": false,
+          "why": "enough_data=False, «мало данных» в ответе: False"
+        }
+      ],
+      "turns": [
+        {
+          "query": "сколько в среднем стоят четырёхкомнатные комфорт-класса в Байконурском районе?",
+          "text": "По четырёхкомнатным квартирам комфорт-класса в Байконурском районе (Астана) статистику посчитать не получилось. В нашем каталоге таких свободных квартир всего 3, а для медианы нужно больше. Это данные только по каталогу, не по рынку.\n\nМогу посмотреть то же без ограничения по классу или по всей Астане, либо найти конкретные варианты 4-комнатных в этом районе. Что из этого подойдёт?",
+          "tool_log": [
+            {
+              "name": "price_stats",
+              "input": {
+                "city": "Астана",
+                "district": "Байконурский",
+                "rooms": 4,
+                "housing_class": "comfort"
+              },
+              "error": false
+            }
+          ],
+          "source_ids": [],
+          "invalid_refs": [],
+          "rounds": 2,
+          "total_ms": 5584,
+          "timings_ms": {
+            "llm1": 2637,
+            "llm2": 2940,
+            "first_token": 5578,
+            "answer": 5584
+          },
+          "llm_calls": [
+            {
+              "ms": 2637,
+              "input_tokens": 4,
+              "output_tokens": 155,
+              "cache_write": 106,
+              "cache_read": 3163,
+              "stop_reason": "tool_use"
+            },
+            {
+              "ms": 2940,
+              "input_tokens": 2,
+              "output_tokens": 159,
+              "cache_write": 295,
+              "cache_read": 3269,
+              "stop_reason": "end_turn"
+            }
+          ],
+          "history_rejected": 0,
+          "cost_usd": 0.006401
+        }
+      ]
+    },
+    {
+      "id": "a10",
+      "tags": [
+        "relax"
+      ],
+      "passed": true,
+      "checks": [
+        {
+          "check": "query_verbatim",
+          "turn": 1,
+          "ok": true,
+          "why": "двушка в Турксибском районе рядом с метро и с детским садом в ЖК"
+        },
+        {
+          "check": "relaxed",
+          "turn": 1,
+          "ok": true,
+          "why": "Ответ явно говорит: «поиск ослабил условия по инфраструктуре ЖК», то есть снятое условие названо прямо, хотя и без конкретного пункта."
+        }
+      ],
+      "turns": [
+        {
+          "query": "двушка в Турксибском районе рядом с метро и с детским садом в ЖК",
+          "text": "Полностью подходящих нет: ни в одном ЖК нет подтверждения близости метро, а поиск ослабил условия по инфраструктуре ЖК.\n\nБлижайшие варианты (двушки в Турксибском районе):\n- [1] ЖК Ясна: детский сад на территории есть, про метро ничего не указано.\n- [2] ЖК Северный Бриз: детский сад в ЖК, плюс рядом парк и подземный паркинг; метро в данных нет.\n- [3] ЖК Новый Ритм: детского сада в ЖК нет (рядом только школа и парк), метро тоже не указано, поэтому подходит хуже остальных.\n\nМожно ослабить требование про метро: в Турксибском районе его в описаниях нет, и можно ориентироваться на остановки и транспорт. Или можно расширить район поиска, и я поищу варианты рядом с метро в соседних районах.",
+          "tool_log": [
+            {
+              "name": "search_listings",
+              "input": {
+                "query": "двушка в Турксибском районе рядом с метро и с детским садом в ЖК"
+              },
+              "error": false
+            }
+          ],
+          "source_ids": [
+            "cx-013",
+            "cx-048",
+            "cx-063"
+          ],
+          "invalid_refs": [],
+          "rounds": 2,
+          "total_ms": 6105,
+          "timings_ms": {
+            "llm1": 2772,
+            "prefetch_wait": 0,
+            "parse": 1597,
+            "embed": 31,
+            "search": 5,
+            "rerank": 0,
+            "llm2": 3331,
+            "first_token": 6099,
+            "answer": 6105
+          },
+          "llm_calls": [
+            {
+              "ms": 2772,
+              "input_tokens": 4,
+              "output_tokens": 91,
+              "cache_write": 99,
+              "cache_read": 3163,
+              "stop_reason": "tool_use"
+            },
+            {
+              "ms": 3331,
+              "input_tokens": 2,
+              "output_tokens": 311,
+              "cache_write": 1123,
+              "cache_read": 3262,
+              "stop_reason": "end_turn"
+            }
+          ],
+          "history_rejected": 0,
+          "cost_usd": 0.009126
+        }
+      ]
+    },
+    {
+      "id": "a11",
+      "tags": [
+        "clarify"
+      ],
+      "passed": true,
+      "checks": [
+        {
+          "check": "query_verbatim",
+          "turn": 1,
+          "ok": true,
+          "why": "хочу квартиру"
+        },
+        {
+          "check": "clarify",
+          "turn": 1,
+          "ok": true,
+          "why": "вызовы: ['search_listings'], показано ЖК: 0"
+        }
+      ],
+      "turns": [
+        {
+          "query": "хочу квартиру",
+          "text": "Уточните, пожалуйста: в каком городе ищете квартиру (Алматы или Астана) и сколько нужно комнат?",
+          "tool_log": [
+            {
+              "name": "search_listings",
+              "input": {
+                "query": "хочу квартиру"
+              },
+              "error": false
+            }
+          ],
+          "source_ids": [],
+          "invalid_refs": [],
+          "rounds": 2,
+          "total_ms": 3972,
+          "timings_ms": {
+            "llm1": 2271,
+            "prefetch_wait": 0,
+            "parse": 2229,
+            "llm2": 1698,
+            "first_token": 3970,
+            "answer": 3972
+          },
+          "llm_calls": [
+            {
+              "ms": 2271,
+              "input_tokens": 4,
+              "output_tokens": 80,
+              "cache_write": 78,
+              "cache_read": 3163,
+              "stop_reason": "tool_use"
+            },
+            {
+              "ms": 1698,
+              "input_tokens": 2,
+              "output_tokens": 47,
+              "cache_write": 143,
+              "cache_read": 3241,
+              "stop_reason": "end_turn"
+            }
+          ],
+          "history_rejected": 0,
+          "cost_usd": 0.003955
+        }
+      ]
+    },
+    {
+      "id": "a12",
+      "tags": [
+        "clarify"
+      ],
+      "passed": true,
+      "checks": [
+        {
+          "check": "query_verbatim",
+          "turn": 1,
+          "ok": true,
+          "why": "квартира у метро в Астане"
+        },
+        {
+          "check": "clarify",
+          "turn": 1,
+          "ok": true,
+          "why": "вызовы: ['search_listings'], показано ЖК: 0"
+        }
+      ],
+      "turns": [
+        {
+          "query": "квартира у метро в Астане",
+          "text": "В Астане метро нет. Что искать: квартиры в Алматы рядом с метро или квартиры в Астане без привязки к метро?",
+          "tool_log": [
+            {
+              "name": "search_listings",
+              "input": {
+                "query": "квартира у метро в Астане"
+              },
+              "error": false
+            }
+          ],
+          "source_ids": [],
+          "invalid_refs": [],
+          "rounds": 2,
+          "total_ms": 4093,
+          "timings_ms": {
+            "llm1": 2459,
+            "prefetch_wait": 0,
+            "parse": 1784,
+            "llm2": 1632,
+            "first_token": 4088,
+            "answer": 4093
+          },
+          "llm_calls": [
+            {
+              "ms": 2459,
+              "input_tokens": 4,
+              "output_tokens": 73,
+              "cache_write": 81,
+              "cache_read": 3163,
+              "stop_reason": "tool_use"
+            },
+            {
+              "ms": 1632,
+              "input_tokens": 2,
+              "output_tokens": 48,
+              "cache_write": 152,
+              "cache_read": 3244,
+              "stop_reason": "end_turn"
+            }
+          ],
+          "history_rejected": 0,
+          "cost_usd": 0.003857
+        }
+      ]
+    }
+  ]
+}
