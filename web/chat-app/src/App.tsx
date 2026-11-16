@@ -2,13 +2,14 @@ import { useEffect, useLayoutEffect, useReducer, useRef, useState } from "react"
 import { AssistantMessage } from "./components/AssistantMessage";
 import { Composer, type ComposerHandle } from "./components/Composer";
 import { EmptyState } from "./components/EmptyState";
-import { ArrowDown } from "lucide-react";
+import { ArrowDown, RotateCcw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Logo } from "./components/Logo";
-import { searchOnce, searchStream, SearchError } from "./lib/api";
+import { chatMode, searchOnce, searchStream, SearchError } from "./lib/api";
 import type { Params } from "./params";
-import { chatReducer, emptyChat } from "./state";
+import { chatReducer, emptyChat, history } from "./state";
+import type { ChatMode } from "./types";
 
 const NEAR_BOTTOM_PX = 64;
 const COLUMN = "mx-auto w-full max-w-[900px] px-4 max-sm:px-3"; // общая колонка: одна левая линия у шапки, ленты и поля
@@ -25,6 +26,13 @@ export function App({ params }: { params: Params }) {
   const cardRefs = useRef(new Map<string, HTMLDivElement>());
   const composer = useRef<ComposerHandle>(null);
   const busy = chat.turns.some((t) => t.reply.busy);
+  const modeReq = useRef<Promise<ChatMode> | null>(null); // GET /chat/config — один раз на страницу
+  const [mode, setMode] = useState<ChatMode>("v1");
+  const loadMode = () => (modeReq.current ??= chatMode());
+
+  useEffect(() => {
+    loadMode().then(setMode);
+  }, []);
 
   function toBottom(smooth = false) {
     const el = log.current;
@@ -52,13 +60,15 @@ export function App({ params }: { params: Params }) {
   async function ask(query: string) {
     const id = nextId();
     atBottom.current = true; // свой запрос — всегда показываем
-    dispatch({ type: "ask", id, query, stream: params.stream });
+    const m = await loadMode();
+    const req = { mode: m, query, history: m === "v2" ? history(chat) : [], siteKey: params.siteKey };
+    dispatch({ type: "ask", id, query, stream: params.stream, mode: m });
     try {
       if (params.stream) {
-        await searchStream(query, params.siteKey, (event) => dispatch({ type: "event", id, event }));
+        await searchStream(req, (event) => dispatch({ type: "event", id, event }));
         dispatch({ type: "end", id }); // без done ход не должен остаться «в процессе» навсегда
       } else {
-        dispatch({ type: "payload", id, payload: await searchOnce(query, params.siteKey) });
+        dispatch({ type: "payload", id, payload: await searchOnce(req) });
       }
     } catch (e) {
       dispatch({ type: "fail", id, text: e instanceof SearchError ? e.message : "Не получилось выполнить поиск. Попробуйте ещё раз." });
@@ -147,7 +157,21 @@ export function App({ params }: { params: Params }) {
             К новым <ArrowDown />
           </Button>
         )}
-        <div className={COLUMN}>
+        <div className={`${COLUMN} flex flex-col gap-1.5`}>
+          {mode === "v2" && chat.turns.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="self-start text-muted-foreground"
+              disabled={busy}
+              onClick={() => {
+                dispatch({ type: "reset" }); // агент помнит диалог — так начинают заново
+                composer.current?.focus();
+              }}
+            >
+              <RotateCcw /> Новый диалог
+            </Button>
+          )}
           <Composer ref={composer} busy={busy} onSend={ask} />
         </div>
       </div>

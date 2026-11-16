@@ -1,4 +1,4 @@
-import type { Complex, SearchEvent, SearchPayload, UnitGroup } from "../types";
+import type { ChatTurn, Complex, SearchEvent, SearchPayload, UnitGroup } from "../types";
 
 // Данные сервера — на входе к значениям по умолчанию: страница не должна падать, если версия API
 // отстаёт или опережает фронтенд (так и было: старый контейнер без chips/labels → белый экран).
@@ -44,6 +44,14 @@ export function normalizeComplexes(v: unknown): Complex[] {
   return Array.isArray(v) ? v.map(normalizeComplex).filter((x): x is Complex => x !== null) : [];
 }
 
+/** Подписанная реплика ассистента; без подписи или с чужими полями — null (в историю не идёт). */
+export function normalizeTurn(raw: unknown): ChatTurn | null {
+  const t = (raw ?? {}) as Record<string, unknown>;
+  const text = str(t.text), sig = str(t.sig), ts = num(t.ts);
+  if (t.role !== "assistant" || text === null || !sig || ts === null) return null;
+  return { role: "assistant", text, source_ids: strs(t.source_ids), ts, sig };
+}
+
 /** Событие SSE → строго типизированное; неизвестные события — null (пропускаем). */
 export function normalizeEvent(name: string, raw: unknown): SearchEvent | null {
   const d = (raw ?? {}) as Record<string, unknown>;
@@ -52,7 +60,9 @@ export function normalizeEvent(name: string, raw: unknown): SearchEvent | null {
     case "filters": return { name, data: { filters: (d.filters as Record<string, unknown>) ?? {}, chips: strs(d.chips) } };
     case "results": return { name, data: { relaxed: strs(d.relaxed), results: normalizeComplexes(d.results) } };
     case "delta": return { name, data: { text: str(d.text) ?? "" } };
-    case "answer": return { name, data: { text: str(d.text) ?? "", invalid_refs: [], cited: strs(d.cited) } };
+    case "answer":
+      return { name, data: { text: str(d.text) ?? "", invalid_refs: [], cited: strs(d.cited), clarified: d.clarified === true, turn: normalizeTurn(d.turn) } };
+    case "tool": return { name, data: { label: str(d.label) ?? "" } };
     case "clarification": return { name, data: { text: str(d.text) ?? "" } };
     case "error": return { name, data: { error: str(d.error) ?? "" } };
     case "done": return { name, data: d };
@@ -68,5 +78,7 @@ export function normalizePayload(raw: unknown): SearchPayload {
     results: normalizeComplexes(d.results),
     answer: str(d.answer) ?? "",
     clarification: str(d.clarification) ?? undefined,
+    clarified: d.clarified === true,
+    turn: normalizeTurn(d.turn),
   };
 }

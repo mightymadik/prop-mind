@@ -35,15 +35,22 @@ const FULL: Ev[] = [
   ["done", {}],
 ];
 
-// calls — только запросы поиска; /health (число объектов на пустом экране) отвечает отдельно
-function mockFetch(handler: (init: RequestInit) => Response, health: Response = Response.json({ complexes: 70, free_units: 2058 })) {
+// calls — только запросы поиска (url — в urls); /health и /chat/config отвечают отдельно
+function mockFetch(
+  handler: (init: RequestInit) => Response,
+  health: Response = Response.json({ complexes: 70, free_units: 2058 }),
+  mode: "v1" | "v2" = "v1",
+) {
   const calls: RequestInit[] = [];
+  const urls: string[] = [];
   vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
     if (url === "/health") return health;
+    if (url === "/chat/config") return Response.json({ mode });
     calls.push(init);
+    urls.push(url);
     return handler(init);
   }));
-  return calls;
+  return Object.assign(calls, { urls });
 }
 
 const input = () => screen.getByLabelText("Запрос") as HTMLTextAreaElement;
@@ -154,7 +161,7 @@ test("Enter sends, Shift+Enter does not; empty input does not send", async () =>
 
 test("search button: disabled when empty, 'Ищу…' while busy; counter appears near the limit", async () => {
   let close: () => void = () => {};
-  vi.stubGlobal("fetch", vi.fn(async (url: string) => url === "/health" ? Response.json({ complexes: 1, free_units: 1 }) : new Response(new ReadableStream<Uint8Array>({
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => url === "/health" ? Response.json({ complexes: 1, free_units: 1 }) : url === "/chat/config" ? Response.json({ mode: "v1" }) : new Response(new ReadableStream<Uint8Array>({
     start(c) {
       close = () => c.close();
     },
@@ -206,7 +213,7 @@ test("'К новым' shows when new content arrives while scrolled up", async (
   let push: (s: string) => void = () => {};
   let close: () => void = () => {};
   const enc = new TextEncoder();
-  vi.stubGlobal("fetch", vi.fn(async () => new Response(new ReadableStream<Uint8Array>({
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => url === "/chat/config" ? Response.json({ mode: "v1" }) : new Response(new ReadableStream<Uint8Array>({
     start(c) {
       push = (s) => c.enqueue(enc.encode(s));
       close = () => c.close();
@@ -242,7 +249,7 @@ test("'К новым' shows when new content arrives while scrolled up", async (
 test("a scroll event without upward movement (content grew below) keeps autoscroll", async () => {
   let push: (s: string) => void = () => {};
   const enc = new TextEncoder();
-  vi.stubGlobal("fetch", vi.fn(async () => new Response(new ReadableStream<Uint8Array>({
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => url === "/chat/config" ? Response.json({ mode: "v1" }) : new Response(new ReadableStream<Uint8Array>({
     start(c) {
       push = (s) => c.enqueue(enc.encode(s));
     },
@@ -322,4 +329,93 @@ test("render error shows a message instead of a blank page", () => {
     </ErrorBoundary>,
   );
   expect(screen.getByRole("alert").textContent).toMatch(/Что-то пошло не так/);
+});
+
+// --- v2: агент (/agent) с историей диалога
+const TURN = { role: "assistant", text: "Лучше [syn-2].", source_ids: ["syn-1", "syn-2"], ts: 1_800_000_000, sig: "abc" };
+const AGENT: Ev[] = [
+  ["tool", { label: "ищу варианты…" }],
+  ["filters", { filters: {}, chips: ["Алматы", "2 комн."] }],
+  ["results", { relaxed: [], results: RESULTS }],
+  ["answer", { text: "Лучше [syn-2].", invalid_refs: [], cited: ["syn-2"], clarified: false, turn: TURN }],
+  ["done", {}],
+];
+const body = (c: RequestInit) => JSON.parse(c.body as string);
+
+test("v2: second message goes to /agent with the first query and the signed reply as history", async () => {
+  const calls = mockFetch(() => sse(AGENT), undefined, "v2");
+  render(<App params={readParams("")} />);
+  await ask("двушка в Алматы");
+  await ask("а подешевле?");
+  expect(calls.urls).toEqual(["/agent", "/agent"]);
+  expect(body(calls[0])).toEqual({ query: "двушка в Алматы", history: [], site_key: null });
+  expect(body(calls[1]).history).toEqual([{ role: "user", text: "двушка в Алматы" }, TURN]);
+  const links = within(turns()[0]).getAllByRole("link");
+  expect(links.map((a) => a.textContent)).toEqual(["№ 2"]);
+});
+
+test("v2: tool label while working; clarified answer is shown as a question", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  const enc = new TextEncoder();
+  mockFetch(() => {
+    const stream = new ReadableStream<Uint8Array>({
+      async start(c) {
+        c.enqueue(enc.encode(`event: tool\ndata: ${JSON.stringify({ label: "ищу варианты…" })}\n\n`));
+        await gate;
+        const answer = { text: "В каком городе ищете?", invalid_refs: [], cited: [], clarified: true, turn: TURN };
+        c.enqueue(enc.encode(`event: answer\ndata: ${JSON.stringify(answer)}\n\nevent: done\ndata: {}\n\n`));
+        c.close();
+      },
+    });
+    return new Response(stream, { headers: { "content-type": "text/event-stream" } });
+  }, undefined, "v2");
+  render(<App params={readParams("")} />);
+  fireEvent.change(input(), { target: { value: "хочу квартиру" } });
+  await act(async () => {
+    fireEvent.keyDown(input(), { key: "Enter" });
+  });
+  expect(await within(turns()[0]).findByText("Ищу варианты…")).toBeTruthy();
+  expect(screen.queryByText(/из 4/)).toBeNull(); // у агента нет этапов «1 из 4»
+  await act(async () => {
+    release();
+  });
+  expect(await within(turns()[0]).findByText("В каком городе ищете?")).toBeTruthy();
+  expect(turns()[0].querySelector(".clarification")).toBeTruthy();
+  expect(turns()[0].querySelector(".answer-text")?.textContent ?? "").toBe("");
+});
+
+test("v2: failed turns stay out of history; new dialog clears the feed and the history", async () => {
+  let n = 0;
+  const calls = mockFetch(() => (++n === 2 ? new Response("boom", { status: 500 }) : sse(AGENT)), undefined, "v2");
+  render(<App params={readParams("")} />);
+  await ask("первый");
+  await ask("второй"); // упал
+  await ask("третий");
+  expect(body(calls[2]).history).toEqual([{ role: "user", text: "первый" }, TURN]);
+
+  fireEvent.click(screen.getByRole("button", { name: "Новый диалог" }));
+  expect(turns()).toHaveLength(0);
+  await ask("с чистого листа");
+  expect(body(calls[3]).history).toEqual([]);
+});
+
+test("v1 mode (or /chat/config down): /search, no history, no new-dialog button", async () => {
+  const calls = mockFetch(() => sse(FULL));
+  render(<App params={readParams("")} />);
+  await ask("первый");
+  await ask("второй");
+  expect(calls.urls).toEqual(["/search", "/search"]);
+  expect(body(calls[1])).toEqual({ query: "второй", site_key: null });
+  expect(screen.queryByRole("button", { name: "Новый диалог" })).toBeNull();
+});
+
+test("v2 without streaming: JSON from /agent, signed turn goes to history", async () => {
+  const payload = { answer: "Лучше [syn-2].", results: RESULTS, chips: ["Алматы"], clarified: false, turn: TURN };
+  const calls = mockFetch(() => Response.json(payload), undefined, "v2");
+  render(<App params={readParams("?stream=0")} />);
+  await ask("двушка");
+  await ask("а дешевле?");
+  expect(body(calls[1]).history).toEqual([{ role: "user", text: "двушка" }, TURN]);
+  expect(within(turns()[0]).getByText("Алматы")).toBeTruthy();
 });

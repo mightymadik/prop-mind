@@ -49,7 +49,9 @@ export function AssistantMessage({ turnId, reply: r, highlighted, cardRefs, onRe
           )}
           <StageSteps stage={r.stage} />
           {!r.stage && r.busy && (
-            <p className="text-muted-foreground">Подбираю варианты — ответ придёт целиком через несколько секунд</p>
+            <p role="status" className="text-muted-foreground">
+              {r.tool ? `${r.tool[0].toUpperCase()}${r.tool.slice(1)}` : "Подбираю варианты — ответ придёт целиком через несколько секунд"}
+            </p>
           )}
           {r.clarification && (
             <Alert role="status" className="border-primary/40">
